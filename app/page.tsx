@@ -8,96 +8,91 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+
 export default function Home() {
   const [user, setUser] = useState<any>(null)
-  const [birthDate, setBirthDate] = useState<string>('')
+  const [formData, setFormData] = useState({
+    year: '', month: '', day: '', time: '',
+    gender: 'male', calendarType: 'solar'
+  })
   const [logs, setLogs] = useState<any[]>([])
 
   useEffect(() => {
-    // 현재 로그인된 유저 정보 가져오기
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user)
     })
-
-    // 데이터 불러오기
     fetchLogs()
   }, [])
 
   const fetchLogs = async () => {
-    const { data } = await supabase
-      .from('user_history')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data } = await supabase.from('user_history').select('*').order('created_at', { ascending: false })
     if (data) setLogs(data)
   }
 
-  // 에러 발생했던 지점: 파라미터에 : any 추가
-  const getDayOfWeek = (dateString: any) => {
-    if (!dateString) return '';
-    const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
-    const dayIndex = new Date(dateString).getDay();
-    return days[dayIndex];
-  }
-
-  const handleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'kakao',
-      options: { redirectTo: window.location.origin }
-    })
-  }
-
   const handleSave = async () => {
-    if (!user || !birthDate) return alert('로그인 후 날짜를 입력해주세요!')
-    
-    const dayOfWeek = getDayOfWeek(birthDate)
-    
+    if (!user || !formData.year || !formData.month || !formData.day) {
+      return alert('필수 정보를 모두 입력해주세요!')
+    }
+
     const { error } = await supabase.from('user_history').insert({
       user_id: user.id,
-      birth_date: birthDate,
-      day_of_week: dayOfWeek
+      birth_year: formData.year,
+      birth_month: formData.month,
+      birth_day: formData.day,
+      birth_time: formData.time || null,
+      gender: formData.gender,
+      calendar_type: formData.calendarType,
+      birth_date: `${formData.year}-${formData.month}-${formData.day}` // 기존 컬럼 호환용
     })
 
-    if (error) {
-      console.error(error)
-      alert('저장 실패!')
-    } else {
-      alert('성공적으로 저장되었습니다!')
-      setBirthDate('')
-      fetchLogs()
+    if (error) alert('저장 실패!')
+    else {
+      alert('사주 정보가 저장되었습니다!');
+      fetchLogs();
     }
   }
 
   return (
-    <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h1>🔮 사주아이 (SAJU-APP)</h1>
+    <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+      <h1>🔮 AI 사주 상담소</h1>
       
       {!user ? (
-        <button onClick={handleLogin} style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}>
+        <button onClick={() => supabase.auth.signInWithOAuth({ provider: 'kakao', options: { redirectTo: window.location.origin } })}>
           카카오 로그인으로 시작하기
         </button>
       ) : (
-        <div>
-          <p>반갑습니다, <strong>{user.user_metadata?.full_name || '사용자'}</strong>님!</p>
-          <div style={{ margin: '20px 0' }}>
-            <input 
-              type="date" 
-              value={birthDate} 
-              onChange={(e) => setBirthDate(e.target.value)}
-              style={{ padding: '10px', fontSize: '16px' }}
-            />
-            <button onClick={handleSave} style={{ padding: '10px 20px', marginLeft: '10px', cursor: 'pointer' }}>
-              내 사주 정보 저장
-            </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <p><strong>{user.user_metadata?.full_name}</strong>님의 사주 입력</p>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
+            <input placeholder="년(YYYY)" onChange={e => setFormData({...formData, year: e.target.value})} />
+            <input placeholder="월(MM)" onChange={e => setFormData({...formData, month: e.target.value})} />
+            <input placeholder="일(DD)" onChange={e => setFormData({...formData, day: e.target.value})} />
           </div>
 
-          <h3>나의 저장 기록</h3>
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {logs.map((log: any) => (
-              <li key={log.id} style={{ marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>
-                📅 {log.birth_date} ({log.day_of_week})
-              </li>
-            ))}
-          </ul>
+          <input type="time" title="출생시간" onChange={e => setFormData({...formData, time: e.target.value})} />
+
+          <select onChange={e => setFormData({...formData, gender: e.target.value})}>
+            <option value="male">남성</option>
+            <option value="female">여성</option>
+          </select>
+
+          <select onChange={e => setFormData({...formData, calendarType: e.target.value})}>
+            <option value="solar">양력</option>
+            <option value="lunar">음력</option>
+          </select>
+
+          <button onClick={handleSave} style={{ padding: '10px', background: '#333', color: '#fff', cursor: 'pointer' }}>
+            사주 저장 및 분석 준비
+          </button>
+
+          <hr />
+          <h3>저장된 사주 목록</h3>
+          {logs.map(log => (
+            <div key={log.id} style={{ fontSize: '14px', borderBottom: '1px solid #eee', padding: '5px 0' }}>
+              {log.birth_year}년 {log.birth_month}월 {log.birth_day}일 ({log.calendar_type === 'solar' ? '양력' : '음력'}) - {log.gender === 'male' ? '남' : '여'}
+            </div>
+          ))}
         </div>
       )}
     </div>
