@@ -67,18 +67,22 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-      })
+      });
 
-      const data = await response.json()
-      if (data.result) {
-        setFortune(data.result)
+      const data = await response.json();
+
+      if (response.ok && data.result) {
+        setFortune(data.result);
       } else {
-        setFortune('AI 분석 결과를 가져오지 못했습니다.')
+        // 💡 에러의 상세 원인을 화면에 표시하도록 개선
+        const errorMsg = data.error || '알 수 없는 에러';
+        const errorDetail = data.details || '';
+        setFortune(`❌ 분석 실패: ${errorMsg}\n상세내용: ${errorDetail}`);
       }
-      fetchLogs() // 저장 목록 새로고침
+      fetchLogs();
     } catch (err) {
       console.error(err)
-      alert('AI 분석 요청 중 네트워크 오류가 발생했습니다.')
+      setFortune("❌ 네트워크 연결에 실패했습니다.");
     } finally {
       setLoading(false)
     }
