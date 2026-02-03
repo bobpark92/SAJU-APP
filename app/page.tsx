@@ -15,13 +15,10 @@ export default function Home() {
     gender: 'male', calendarType: 'solar'
   })
   const [logs, setLogs] = useState<any[]>([])
-  
-  // AI 관련 상태
   const [fortune, setFortune] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // 로그인 유저 확인
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user)
     })
@@ -33,16 +30,14 @@ export default function Home() {
     if (data) setLogs(data)
   }
 
-  // 저장 및 AI 분석 요청 함수
   const handleSaveAndAnalyze = async () => {
     if (!user || !formData.year || !formData.month || !formData.day) {
       return alert('필수 정보(년, 월, 일)를 모두 입력해주세요!')
     }
 
     setLoading(true)
-    setFortune('') // 이전 결과 초기화
+    setFortune('')
 
-    // 1. Supabase에 데이터 저장
     const { error } = await supabase.from('user_history').insert({
       user_id: user.id,
       birth_year: formData.year,
@@ -55,13 +50,11 @@ export default function Home() {
     })
 
     if (error) {
-      console.error(error)
       alert('데이터 저장 중 오류가 발생했습니다.')
       setLoading(false)
       return
     }
 
-    // 2. API를 통해 AI 분석 결과 가져오기
     try {
       const response = await fetch('/api/fortune', {
         method: 'POST',
@@ -74,15 +67,14 @@ export default function Home() {
       if (response.ok && data.result) {
         setFortune(data.result);
       } else {
-        // 💡 에러의 상세 원인을 화면에 표시하도록 개선
-        const errorMsg = data.error || '알 수 없는 에러';
-        const errorDetail = data.details || '';
-        setFortune(`❌ 분석 실패: ${errorMsg}\n상세내용: ${errorDetail}`);
+        // 상세 에러 내용을 더 잘 보이게 표시
+        const msg = data.error || '분석 중 오류 발생';
+        const detail = data.details || '서버 환경 변수를 확인해주세요.';
+        setFortune(`❌ 에러: ${msg}\n\n도움말: ${detail}`);
       }
       fetchLogs();
     } catch (err) {
-      console.error(err)
-      setFortune("❌ 네트워크 연결에 실패했습니다.");
+      setFortune("❌ 네트워크 오류가 발생했습니다.");
     } finally {
       setLoading(false)
     }
@@ -139,7 +131,6 @@ export default function Home() {
             {loading ? 'AI 분석 중...' : '사주 저장 및 분석하기'}
           </button>
 
-          {/* AI 분석 결과창 */}
           {fortune && (
             <div style={{ marginTop: '30px', padding: '20px', background: '#f0f4f8', borderRadius: '15px', border: '1px solid #d1d9e6' }}>
               <h2 style={{ marginTop: 0 }}>📜 AI 분석 결과</h2>
@@ -148,7 +139,6 @@ export default function Home() {
           )}
 
           <hr style={{ width: '100%', margin: '30px 0' }} />
-          
           <h3>나의 과거 입력 기록</h3>
           <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
             {logs.map((log: any) => (
