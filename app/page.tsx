@@ -31,7 +31,7 @@ export default function Home() {
 
   const handleSaveAndAnalyze = async () => {
     if (!user || !formData.year || !formData.month || !formData.day) {
-      return alert('필수 정보(년, 월, 일)를 모두 입력해주세요!')
+      return alert('태어난 년, 월, 일을 모두 입력해주세요!')
     }
 
     setLoading(true)
@@ -83,74 +83,107 @@ export default function Home() {
     })
   }
 
+  // 스타일 헬퍼 (중복 코드 방지)
+  const labelStyle = { display: 'block', marginBottom: '8px', fontWeight: 'bold' as const, color: '#555', fontSize: '14px' };
+  const inputStyle = { width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #ddd', color: '#000', fontSize: '16px', boxSizing: 'border-box' as const };
+
   return (
-    // 전체 배경을 밝은 회색으로 설정하여 흰색 카드가 잘 보이게 함
-    <div style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', padding: '20px', color: '#333' }}>
-      <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: '#ffffff', padding: '30px', borderRadius: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
+    <div style={{ backgroundColor: '#f0f2f5', minHeight: '100vh', padding: '15px', color: '#333' }}>
+      <div style={{ maxWidth: '480px', margin: '0 auto', backgroundColor: '#ffffff', padding: '25px', borderRadius: '24px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}>
         
-        <h1 style={{ textAlign: 'center', color: '#1a1a1a', marginBottom: '30px' }}>🔮 AI 사주 상담소</h1>
+        <h1 style={{ textAlign: 'center', color: '#1a1a1a', marginBottom: '5px', fontSize: '24px' }}>🔮 AI 사주 상담소</h1>
+        <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '30px' }}>2026년 병오년(丙午年) 운세 분석</p>
         
         {!user ? (
-          <div style={{ textAlign: 'center', padding: '50px 0' }}>
-            <button onClick={handleLogin} style={{ padding: '15px 30px', fontSize: '18px', background: '#FEE500', color: '#3c1e1e', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
-              카카오 로그인으로 시작하기
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <p style={{ marginBottom: '20px', color: '#666' }}>당신의 미래를 AI 전문가가 풀어드립니다.</p>
+            <button onClick={handleLogin} style={{ width: '100%', padding: '18px', fontSize: '18px', background: '#FEE500', color: '#3c1e1e', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
+              카카오로 1초만에 시작하기
             </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <p style={{ textAlign: 'center', fontSize: '18px' }}>
-              👋 안녕하세요, <strong>{user.user_metadata?.full_name}</strong>님!
+            <p style={{ textAlign: 'center', fontSize: '16px', margin: '0 0 10px 0' }}>
+              반가워요, <strong>{user.user_metadata?.full_name}</strong>님!
             </p>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-              <input placeholder="년(YYYY)" value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', color: '#000' }} />
-              <input placeholder="월(MM)" value={formData.month} onChange={e => setFormData({...formData, month: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', color: '#000' }} />
-              <input placeholder="일(DD)" value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', color: '#000' }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <label style={{ fontWeight: 'bold' }}>태어난 시간:</label>
-              <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', color: '#000', flexGrow: 1 }} />
+            {/* 세로 배치 입력창들 */}
+            <div>
+              <label style={labelStyle}>태어난 연도</label>
+              <input type="number" placeholder="예: 1990" value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} style={inputStyle} />
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', color: '#000', flexGrow: 1 }}>
-                <option value="male">남성</option>
-                <option value="female">여성</option>
-              </select>
-              <select value={formData.calendarType} onChange={e => setFormData({...formData, calendarType: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', color: '#000', flexGrow: 1 }}>
-                <option value="solar">양력</option>
-                <option value="lunar">음력</option>
-              </select>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>월</label>
+                <input type="number" placeholder="MM" value={formData.month} onChange={e => setFormData({...formData, month: e.target.value})} style={inputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>일</label>
+                <input type="number" placeholder="DD" value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} style={inputStyle} />
+              </div>
+            </div>
+
+            <div>
+              <label style={labelStyle}>태어난 시간 (선택)</label>
+              <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} style={inputStyle} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>성별</label>
+                <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} style={inputStyle}>
+                  <option value="male">남성</option>
+                  <option value="female">여성</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>양력/음력</label>
+                <select value={formData.calendarType} onChange={e => setFormData({...formData, calendarType: e.target.value})} style={inputStyle}>
+                  <option value="solar">양력</option>
+                  <option value="lunar">음력</option>
+                </select>
+              </div>
             </div>
 
             <button 
               onClick={handleSaveAndAnalyze} 
               disabled={loading}
-              style={{ padding: '16px', background: loading ? '#aaa' : '#4a90e2', color: '#fff', border: 'none', borderRadius: '12px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '18px', fontWeight: 'bold', transition: '0.3s' }}
+              style={{ 
+                padding: '18px', 
+                background: loading ? '#ccc' : 'linear-gradient(135deg, #6e8efb, #a777e3)', 
+                color: '#fff', 
+                border: 'none', 
+                borderRadius: '14px', 
+                cursor: loading ? 'not-allowed' : 'pointer', 
+                fontSize: '18px', 
+                fontWeight: 'bold',
+                marginTop: '10px',
+                boxShadow: loading ? 'none' : '0 4px 15px rgba(110, 142, 251, 0.3)'
+              }}
             >
-              {loading ? '🔮 운세를 읽는 중...' : '사주 저장 및 분석하기'}
+              {loading ? '🔮 운세 분석 중...' : '2026년 내 운세 보기'}
             </button>
 
-            {/* AI 분석 결과창 - 디자인 대폭 강화 */}
+            {/* AI 분석 결과창 */}
             {fortune && (
-              <div style={{ marginTop: '30px', padding: '25px', backgroundColor: '#fff9eb', borderRadius: '15px', border: '2px solid #e6b800', position: 'relative' }}>
-                <h2 style={{ marginTop: 0, color: '#856404', borderBottom: '1px solid #ffeeba', paddingBottom: '10px' }}>📜 AI가 풀어준 사주 정보</h2>
-                <div style={{ whiteSpace: 'pre-wrap', color: '#333', lineHeight: '1.8', fontSize: '16px', marginTop: '15px' }}>
+              <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#fff9eb', borderRadius: '18px', border: '1px solid #f3e1a0' }}>
+                <h2 style={{ marginTop: 0, color: '#856404', fontSize: '18px', borderBottom: '1px solid #f3e1a0', paddingBottom: '10px', marginBottom: '15px' }}>📜 2026년 운세 풀이</h2>
+                <div style={{ whiteSpace: 'pre-wrap', color: '#333', lineHeight: '1.7', fontSize: '15px' }}>
                   {fortune}
                 </div>
               </div>
             )}
 
-            <hr style={{ width: '100%', margin: '40px 0', border: '0', borderTop: '1px solid #eee' }} />
+            <hr style={{ width: '100%', margin: '30px 0', border: '0', borderTop: '1px solid #eee' }} />
             
-            <h3 style={{ color: '#666' }}>📅 나의 이전 기록</h3>
-            <div style={{ maxHeight: '200px', overflowY: 'auto', backgroundColor: '#f9f9f9', borderRadius: '10px', padding: '10px' }}>
-              {logs.length > 0 ? logs.map((log: any) => (
-                <div key={log.id} style={{ fontSize: '14px', borderBottom: '1px solid #eee', padding: '10px', color: '#555' }}>
-                  {log.birth_year}년 {log.birth_month}월 {log.birth_day}일 | {log.gender === 'male' ? '남' : '여'} | {log.calendar_type === 'solar' ? '양력' : '음력'}
+            <h3 style={{ color: '#888', fontSize: '15px', marginBottom: '10px' }}>🕒 최근 조회 기록</h3>
+            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+              {logs.length > 0 ? logs.slice(0, 5).map((log: any) => (
+                <div key={log.id} style={{ fontSize: '13px', backgroundColor: '#f9f9f9', padding: '12px', borderRadius: '10px', marginBottom: '8px', color: '#666' }}>
+                  📅 {log.birth_year}.{log.birth_month}.{log.birth_day} ({log.calendar_type === 'solar' ? '양력' : '음력'})
                 </div>
-              )) : <p style={{ textAlign: 'center', color: '#999' }}>기록이 없습니다.</p>}
+              )) : <p style={{ fontSize: '13px', color: '#ccc', textAlign: 'center' }}>조회 기록이 없습니다.</p>}
             </div>
           </div>
         )}
