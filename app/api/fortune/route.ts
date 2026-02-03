@@ -19,13 +19,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { year, month, day, time, gender, calendarType } = body;
 
+// app/api/fortune/route.ts 내 프롬프트 부분 수정
     const prompt = `
-      사주 전문가로서 다음 사람의 사주를 분석해주세요.
-      - 출생년월일: ${year}년 ${month}월 ${day}일 (${calendarType === 'solar' ? '양력' : '음력'})
-      - 출생시간: ${time || '모름'}
-      - 성별: ${gender === 'male' ? '남성' : '여성'}
+    당신은 2026년 현재 최고의 사주 전문가입니다.
+    오늘은 2026년 2월 3일입니다.
 
-      위 정보를 바탕으로 올해의 총운, 성격, 주의할 점을 한국어로 상세히 설명해주세요.
+    다음 사람의 사주를 분석하여 **2026년 병오년(丙午年)**의 운세를 중심으로 풀이해주세요.
+    - 출생: ${year}년 ${month}월 ${day}일 (${calendarType === 'solar' ? '양력' : '음력'})
+    - 시간: ${time || '모름'}
+    - 성별: ${gender === 'male' ? '남성' : '여성'}
+
+    2026년의 전체적인 흐름, 재물운, 애정운, 그리고 주의할 점을 한국어로 부드럽게 상세히 설명해주세요. 
+    그리고 자식운에 대해서도 마지막에 꼭 적어주세요 !!! (자식이 있다면 어떻게 성장할것인가, 관계는 어떨것인가 등등 )
+    "2023년" 같은 과거 이야기는 절대 하지 마세요.
     `;
 
     const completion = await openai.chat.completions.create({
