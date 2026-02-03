@@ -3,8 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 
 // Vercel 환경변수에서 가져오거나, 없으면 빈 문자열 처리
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = 'https://iwdibqpymfbjblkpzvan.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3ZGlicXB5bWZiamJsa3B6dmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjQ3MDEsImV4cCI6MjA4NTYwMDcwMX0.6dNJ5yj6a1zmR08zpwz4j8UrlhmqOH0QRWMlyqjKk4o'
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export default function Home() {
