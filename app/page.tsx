@@ -9,7 +9,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export default function Home() {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<any>(null)
   const [birthDate, setBirthDate] = useState("")
 
   useEffect(() => {
