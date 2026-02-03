@@ -2,12 +2,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 
-// Vercel 환경변수에서 가져오거나, 없으면 빈 문자열 처리
-const supabaseUrl = 'https://iwdibqpymfbjblkpzvan.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3ZGlicXB5bWZiamJsa3B6dmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjQ3MDEsImV4cCI6MjA4NTYwMDcwMX0.6dNJ5yj6a1zmR08zpwz4j8UrlhmqOH0QRWMlyqjKk4o'
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
+// Supabase 클라이언트 설정
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+)
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
@@ -16,8 +15,13 @@ export default function Home() {
     gender: 'male', calendarType: 'solar'
   })
   const [logs, setLogs] = useState<any[]>([])
+  
+  // AI 관련 상태
+  const [fortune, setFortune] = useState<string>('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    // 로그인 유저 확인
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user)
     })
@@ -29,11 +33,16 @@ export default function Home() {
     if (data) setLogs(data)
   }
 
-  const handleSave = async () => {
+  // 저장 및 AI 분석 요청 함수
+  const handleSaveAndAnalyze = async () => {
     if (!user || !formData.year || !formData.month || !formData.day) {
-      return alert('필수 정보를 모두 입력해주세요!')
+      return alert('필수 정보(년, 월, 일)를 모두 입력해주세요!')
     }
 
+    setLoading(true)
+    setFortune('') // 이전 결과 초기화
+
+    // 1. Supabase에 데이터 저장
     const { error } = await supabase.from('user_history').insert({
       user_id: user.id,
       birth_year: formData.year,
@@ -42,57 +51,108 @@ export default function Home() {
       birth_time: formData.time || null,
       gender: formData.gender,
       calendar_type: formData.calendarType,
-      birth_date: `${formData.year}-${formData.month}-${formData.day}` // 기존 컬럼 호환용
+      birth_date: `${formData.year}-${formData.month}-${formData.day}`
     })
 
-    if (error) alert('저장 실패!')
-    else {
-      alert('사주 정보가 저장되었습니다!');
-      fetchLogs();
+    if (error) {
+      console.error(error)
+      alert('데이터 저장 중 오류가 발생했습니다.')
+      setLoading(false)
+      return
+    }
+
+    // 2. API를 통해 AI 분석 결과 가져오기
+    try {
+      const response = await fetch('/api/fortune', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await response.json()
+      if (data.result) {
+        setFortune(data.result)
+      } else {
+        setFortune('AI 분석 결과를 가져오지 못했습니다.')
+      }
+      fetchLogs() // 저장 목록 새로고침
+    } catch (err) {
+      console.error(err)
+      alert('AI 분석 요청 중 네트워크 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
     }
   }
 
+  const handleLogin = () => {
+    supabase.auth.signInWithOAuth({ 
+      provider: 'kakao', 
+      options: { redirectTo: window.location.origin } 
+    })
+  }
+
   return (
-    <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-      <h1>🔮 AI 사주 상담소</h1>
+    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif', lineHeight: '1.6' }}>
+      <h1 style={{ textAlign: 'center' }}>🔮 AI 사주 상담소</h1>
       
       {!user ? (
-        <button onClick={() => supabase.auth.signInWithOAuth({ provider: 'kakao', options: { redirectTo: window.location.origin } })}>
-          카카오 로그인으로 시작하기
-        </button>
+        <div style={{ textAlign: 'center', marginTop: '50px' }}>
+          <button onClick={handleLogin} style={{ padding: '15px 30px', fontSize: '18px', background: '#FEE500', border: 'none', borderRadius: '12px', cursor: 'pointer' }}>
+            카카오 로그인으로 시작하기
+          </button>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <p><strong>{user.user_metadata?.full_name}</strong>님의 사주 입력</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <p style={{ textAlign: 'center' }}><strong>{user.user_metadata?.full_name}</strong>님, 사주 정보를 입력해주세요.</p>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
-            <input placeholder="년(YYYY)" onChange={e => setFormData({...formData, year: e.target.value})} />
-            <input placeholder="월(MM)" onChange={e => setFormData({...formData, month: e.target.value})} />
-            <input placeholder="일(DD)" onChange={e => setFormData({...formData, day: e.target.value})} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+            <input placeholder="년(YYYY)" value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} style={{ padding: '10px' }} />
+            <input placeholder="월(MM)" value={formData.month} onChange={e => setFormData({...formData, month: e.target.value})} style={{ padding: '10px' }} />
+            <input placeholder="일(DD)" value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} style={{ padding: '10px' }} />
           </div>
 
-          <input type="time" title="출생시간" onChange={e => setFormData({...formData, time: e.target.value})} />
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <label style={{ flexShrink: 0 }}>태어난 시간:</label>
+            <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} style={{ padding: '10px', flexGrow: 1 }} />
+          </div>
 
-          <select onChange={e => setFormData({...formData, gender: e.target.value})}>
-            <option value="male">남성</option>
-            <option value="female">여성</option>
-          </select>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} style={{ padding: '10px', flexGrow: 1 }}>
+              <option value="male">남성</option>
+              <option value="female">여성</option>
+            </select>
+            <select value={formData.calendarType} onChange={e => setFormData({...formData, calendarType: e.target.value})} style={{ padding: '10px', flexGrow: 1 }}>
+              <option value="solar">양력</option>
+              <option value="lunar">음력</option>
+            </select>
+          </div>
 
-          <select onChange={e => setFormData({...formData, calendarType: e.target.value})}>
-            <option value="solar">양력</option>
-            <option value="lunar">음력</option>
-          </select>
-
-          <button onClick={handleSave} style={{ padding: '10px', background: '#333', color: '#fff', cursor: 'pointer' }}>
-            사주 저장 및 분석 준비
+          <button 
+            onClick={handleSaveAndAnalyze} 
+            disabled={loading}
+            style={{ padding: '15px', background: loading ? '#ccc' : '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '16px' }}
+          >
+            {loading ? 'AI 분석 중...' : '사주 저장 및 분석하기'}
           </button>
 
-          <hr />
-          <h3>저장된 사주 목록</h3>
-          {logs.map(log => (
-            <div key={log.id} style={{ fontSize: '14px', borderBottom: '1px solid #eee', padding: '5px 0' }}>
-              {log.birth_year}년 {log.birth_month}월 {log.birth_day}일 ({log.calendar_type === 'solar' ? '양력' : '음력'}) - {log.gender === 'male' ? '남' : '여'}
+          {/* AI 분석 결과창 */}
+          {fortune && (
+            <div style={{ marginTop: '30px', padding: '20px', background: '#f0f4f8', borderRadius: '15px', border: '1px solid #d1d9e6' }}>
+              <h2 style={{ marginTop: 0 }}>📜 AI 분석 결과</h2>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{fortune}</div>
             </div>
-          ))}
+          )}
+
+          <hr style={{ width: '100%', margin: '30px 0' }} />
+          
+          <h3>나의 과거 입력 기록</h3>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {logs.map((log: any) => (
+              <div key={log.id} style={{ fontSize: '14px', borderBottom: '1px solid #eee', padding: '8px 0' }}>
+                📅 {log.birth_year}-{log.birth_month}-{log.birth_day} | {log.gender === 'male' ? '남' : '여'} | {log.calendar_type === 'solar' ? '양력' : '음력'}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
