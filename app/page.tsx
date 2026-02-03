@@ -2,94 +2,101 @@
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 
-// 보내주신 URL과 KEY를 적용했습니다.
-const supabaseUrl = 'https://iwdibqpymfbjblkpzvan.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3ZGlicXB5bWZiamJsa3B6dmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjQ3MDEsImV4cCI6MjA4NTYwMDcwMX0.6dNJ5yj6a1zmR08zpwz4j8UrlhmqOH0QRWMlyqjKk4o'
-
+// Vercel 환경변수에서 가져오거나, 없으면 빈 문자열 처리
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
-  const [birthDate, setBirthDate] = useState("")
+  const [birthDate, setBirthDate] = useState<string>('')
+  const [logs, setLogs] = useState<any[]>([])
 
   useEffect(() => {
     // 현재 로그인된 유저 정보 가져오기
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUser(data.user)
     })
+
+    // 데이터 불러오기
+    fetchLogs()
   }, [])
 
-  // 날짜를 입력받아 요일을 한글로 반환하는 함수
-  const getDayOfWeek = (dateString) => {
+  const fetchLogs = async () => {
+    const { data } = await supabase
+      .from('user_history')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (data) setLogs(data)
+  }
+
+  // 에러 발생했던 지점: 파라미터에 : any 추가
+  const getDayOfWeek = (dateString: any) => {
+    if (!dateString) return '';
     const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
     const dayIndex = new Date(dateString).getDay();
     return days[dayIndex];
-  };
+  }
 
-  // DB에 데이터 저장하기
-  const saveData = async () => {
-    if (!birthDate) return alert("날짜를 먼저 선택해주세요!");
-
-    const day = getDayOfWeek(birthDate);
-    
-    const { error } = await supabase
-      .from('user_history') // Supabase에 만든 테이블 이름
-      .insert([
-        { 
-          user_id: user.id, 
-          birth_date: birthDate, 
-          day_of_week: day,
-          weather: '맑음' // 우선 연습용으로 '맑음' 고정
-        }
-      ]);
-
-    if (error) {
-      console.error(error);
-      alert("저장 실패! (RLS 정책 설정을 확인해보세요)");
-    } else {
-      alert(`성공! ${birthDate}는 ${day}였습니다. DB에 저장 완료!`);
-    }
-  };
-
-  const handleLogin = () => {
-    supabase.auth.signInWithOAuth({
+  const handleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: { redirectTo: window.location.origin }
     })
   }
 
+  const handleSave = async () => {
+    if (!user || !birthDate) return alert('로그인 후 날짜를 입력해주세요!')
+    
+    const dayOfWeek = getDayOfWeek(birthDate)
+    
+    const { error } = await supabase.from('user_history').insert({
+      user_id: user.id,
+      birth_date: birthDate,
+      day_of_week: dayOfWeek
+    })
+
+    if (error) {
+      console.error(error)
+      alert('저장 실패!')
+    } else {
+      alert('성공적으로 저장되었습니다!')
+      setBirthDate('')
+      fetchLogs()
+    }
+  }
+
   return (
-    <div style={{ padding: '50px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-      {user ? (
-        <div style={{ border: '1px solid #ddd', padding: '20px', borderRadius: '15px' }}>
-          <h1>🔮 {user.user_metadata.full_name}님의 사주 기록기</h1>
-          <p>태어난 날짜를 선택하고 저장 버튼을 눌러보세요.</p>
-          
-          <input 
-            type="date" 
-            onChange={(e) => setBirthDate(e.target.value)} 
-            style={{ padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ccc' }}
-          />
-          <button 
-            onClick={saveData}
-            style={{ marginLeft: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            기록 저장하기
-          </button>
-          
-          <div style={{ marginTop: '20px' }}>
-             <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>로그아웃</button>
-          </div>
-        </div>
+    <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <h1>🔮 사주아이 (SAJU-APP)</h1>
+      
+      {!user ? (
+        <button onClick={handleLogin} style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}>
+          카카오 로그인으로 시작하기
+        </button>
       ) : (
         <div>
-          <h1>사주아이 연습 서비스</h1>
-          <button 
-            onClick={handleLogin} 
-            style={{ padding: '15px 30px', backgroundColor: '#FEE500', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold' }}
-          >
-            카카오 로그인으로 시작하기
-          </button>
+          <p>반갑습니다, <strong>{user.user_metadata?.full_name || '사용자'}</strong>님!</p>
+          <div style={{ margin: '20px 0' }}>
+            <input 
+              type="date" 
+              value={birthDate} 
+              onChange={(e) => setBirthDate(e.target.value)}
+              style={{ padding: '10px', fontSize: '16px' }}
+            />
+            <button onClick={handleSave} style={{ padding: '10px 20px', marginLeft: '10px', cursor: 'pointer' }}>
+              내 사주 정보 저장
+            </button>
+          </div>
+
+          <h3>나의 저장 기록</h3>
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {logs.map((log: any) => (
+              <li key={log.id} style={{ marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>
+                📅 {log.birth_date} ({log.day_of_week})
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
