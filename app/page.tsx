@@ -1,65 +1,97 @@
-import Image from "next/image";
+"use client";
+import { createClient } from '@supabase/supabase-js'
+import { useEffect, useState } from 'react'
+
+// 보내주신 URL과 KEY를 적용했습니다.
+const supabaseUrl = 'https://iwdibqpymfbjblkpzvan.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3ZGlicXB5bWZiamJsa3B6dmFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjQ3MDEsImV4cCI6MjA4NTYwMDcwMX0.6dNJ5yj6a1zmR08zpwz4j8UrlhmqOH0QRWMlyqjKk4o'
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export default function Home() {
+  const [user, setUser] = useState(null)
+  const [birthDate, setBirthDate] = useState("")
+
+  useEffect(() => {
+    // 현재 로그인된 유저 정보 가져오기
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setUser(data.user)
+    })
+  }, [])
+
+  // 날짜를 입력받아 요일을 한글로 반환하는 함수
+  const getDayOfWeek = (dateString) => {
+    const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+    const dayIndex = new Date(dateString).getDay();
+    return days[dayIndex];
+  };
+
+  // DB에 데이터 저장하기
+  const saveData = async () => {
+    if (!birthDate) return alert("날짜를 먼저 선택해주세요!");
+
+    const day = getDayOfWeek(birthDate);
+    
+    const { error } = await supabase
+      .from('user_history') // Supabase에 만든 테이블 이름
+      .insert([
+        { 
+          user_id: user.id, 
+          birth_date: birthDate, 
+          day_of_week: day,
+          weather: '맑음' // 우선 연습용으로 '맑음' 고정
+        }
+      ]);
+
+    if (error) {
+      console.error(error);
+      alert("저장 실패! (RLS 정책 설정을 확인해보세요)");
+    } else {
+      alert(`성공! ${birthDate}는 ${day}였습니다. DB에 저장 완료!`);
+    }
+  };
+
+  const handleLogin = () => {
+    supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: { redirectTo: window.location.origin }
+    })
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div style={{ padding: '50px', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      {user ? (
+        <div style={{ border: '1px solid #ddd', padding: '20px', borderRadius: '15px' }}>
+          <h1>🔮 {user.user_metadata.full_name}님의 사주 기록기</h1>
+          <p>태어난 날짜를 선택하고 저장 버튼을 눌러보세요.</p>
+          
+          <input 
+            type="date" 
+            onChange={(e) => setBirthDate(e.target.value)} 
+            style={{ padding: '10px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ccc' }}
+          />
+          <button 
+            onClick={saveData}
+            style={{ marginLeft: '10px', padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            기록 저장하기
+          </button>
+          
+          <div style={{ marginTop: '20px' }}>
+             <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer' }}>로그아웃</button>
+          </div>
         </div>
-      </main>
+      ) : (
+        <div>
+          <h1>사주아이 연습 서비스</h1>
+          <button 
+            onClick={handleLogin} 
+            style={{ padding: '15px 30px', backgroundColor: '#FEE500', border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold' }}
+          >
+            카카오 로그인으로 시작하기
+          </button>
+        </div>
+      )}
     </div>
-  );
+  )
 }
