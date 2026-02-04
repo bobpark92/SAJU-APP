@@ -6,46 +6,54 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API 키가 설정되지 않았습니다.' }, { status: 500 });
-    }
-
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ apiKey: apiKey || '' });
+    
     const body = await request.json();
     const { year, month, day, time, gender, calendarType } = body;
 
     const prompt = `
-      당신은 30년 경력의 명리학 대가입니다. 
-      오늘 날짜는 2026년 2월 4일입니다.
-      
+      당신은 사주팔자와 만세력 전문가입니다. 사용자의 정보를 바탕으로 분석 결과를 **반드시 JSON 형식**으로만 답변하세요.
+
       사용자 정보:
       - 생년월일: ${year}년 ${month}월 ${day}일 (${calendarType === 'solar' ? '양력' : '음력'})
-      - 태어난 시간: ${time || '모름'}
+      - 시간: ${time || '모름'}
       - 성별: ${gender === 'male' ? '남성' : '여성'}
 
       분석 지침:
-      1. 위 정보를 바탕으로 이 사람만의 고유한 [사주팔자]와 [오행] 구성을 분석하세요.
-      2. 2026년 병오년(丙午年)의 기운이 이 사람과 어떻게 충돌/보완되는지 개인 맞춤형으로 설명하세요.
-      3. 뻔한 덕담은 지양하고, 특히 조심해야 할 달(月)과 행운의 아이템을 구체적으로 짚어주세요.
-      4. 말투는 위트 있는 '점집 도사님' 말투를 사용하세요.
-      5. 답변 시작에 "2026년 병오년, ${gender === 'male' ? '선비' : '아씨'}님을 위한 특급 처방입니다"라고 적어주세요.
+      1. 'manse' 객체에는 연주, 월주, 일주의 천간과 지지를 각각 1글자의 한자로 포함하세요. (시주는 모를 경우 '-' 처리)
+      2. 'themes' 배열에는 최소 6개의 분석 테마를 넣으세요.
+      3. 각 테마의 'title'은 "화려한 조명 속에서 칼춤 추는 승부사" 같이 아주 매력적이고 은유적인 소제목으로 지으세요.
+      4. 'content'는 해당 테마에 대한 심층적인 분석 내용을 '도사님' 말투로 상세히 적으세요.
+
+      응답 예시 형식:
+      {
+        "manse": {
+          "year_top": "壬", "year_bottom": "申",
+          "month_top": "壬", "month_bottom": "寅",
+          "day_top": "丁", "day_bottom": "巳",
+          "time_top": "-", "time_bottom": "-"
+        },
+        "themes": [
+          { "title": "소제목1", "content": "내용1" },
+          { "title": "소제목2", "content": "내용2" }
+        ]
+      }
     `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.8, 
+      response_format: { type: "json_object" }, // JSON 출력 강제
+      temperature: 0.7,
     });
 
     const result = completion.choices[0].message.content;
 
-    // 💡 클라이언트(page.tsx)에서 DB에 저장할 수 있도록 프롬프트와 결과를 함께 반환
     return NextResponse.json({ 
-      result: result,
+      result: result, // JSON 문자열
       promptSent: prompt 
     });
   } catch (error: any) {
-    console.error('Fortune API Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

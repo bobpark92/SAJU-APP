@@ -13,160 +13,147 @@ export default function Home() {
     year: '', month: '', day: '', time: '',
     gender: 'male', calendarType: 'solar'
   })
-  const [logs, setLogs] = useState<any[]>([])
-  const [fortune, setFortune] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [analysis, setAnalysis] = useState<any>(null)
+  const [openIndex, setOpenIndex] = useState<number | null>(0) // 첫번째 항목은 열어둠
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUser(data.user)
-    })
-    fetchLogs()
+    supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user) })
   }, [])
 
-  // 💡 기록을 가져올 때 개수 제한을 100개로 대폭 늘렸습니다.
-  const fetchLogs = async () => {
-    const { data, error } = await supabase
-      .from('user_history')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100); // 20개에서 100개로 변경
-      
-    if (error) {
-      console.error("기록 불러오기 실패:", error.message);
-    } else if (data) {
-      setLogs(data)
-    }
-  }
-
-  const handleSaveAndAnalyze = async () => {
-    if (!user || !formData.year || !formData.month || !formData.day) {
-      return alert('태어난 년, 월, 일을 모두 입력해주세요!')
-    }
-
-    setLoading(true)
-    setFortune('')
+  const handleAnalyze = async () => {
+    if (!formData.year || !formData.month || !formData.day) return alert('정보를 입력해주세요!');
+    setLoading(true);
+    setAnalysis(null);
 
     try {
-      // 1. AI 분석 요청
       const response = await fetch('/api/fortune', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '분석 실패');
+      const parsed = JSON.parse(data.result);
+      setAnalysis(parsed);
 
-      // 2. Supabase 저장
-      const { error: dbError } = await supabase.from('user_history').insert({
-        user_id: user.id,
+      // DB 저장
+      await supabase.from('user_history').insert({
+        user_id: user?.id,
         birth_year: formData.year,
         birth_month: formData.month,
         birth_day: formData.day,
-        birth_time: formData.time || null,
         gender: formData.gender,
         calendar_type: formData.calendarType,
-        birth_date: `${formData.year}-${formData.month}-${formData.day}`,
-        prompt_sent: data.promptSent,
-        fortune_result: data.result
+        fortune_result: data.result,
+        prompt_sent: data.promptSent
       });
-
-      if (dbError) throw new Error(dbError.message);
-
-      setFortune(data.result);
-      // 💡 저장 후 즉시 최신 목록을 다시 가져옵니다.
-      await fetchLogs(); 
-    } catch (err: any) {
-      console.error(err);
-      alert(`오류: ${err.message}`);
+    } catch (err) {
+      alert('분석 중 오류가 발생했습니다.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
-  const handleLogin = () => {
-    supabase.auth.signInWithOAuth({ 
-      provider: 'kakao', 
-      options: { redirectTo: window.location.origin } 
-    })
+  // 오행별 색상 지정 함수 (만세력 시각화용)
+  const getElementColor = (char: string) => {
+    if ("甲乙寅卯".includes(char)) return { color: "#2d6a4f", bg: "#e8f5e9" }; // 목(초록)
+    if ("丙丁巳午".includes(char)) return { color: "#ae2012", bg: "#fff0f0" }; // 화(빨강)
+    if ("戊己辰戌丑未".includes(char)) return { color: "#9c6644", bg: "#fdf5e6" }; // 토(노랑/갈색)
+    if ("庚辛申酉".includes(char)) return { color: "#495057", bg: "#f8f9fa" }; // 금(흰색/회색)
+    if ("壬癸亥子".includes(char)) return { color: "#003049", bg: "#e0f2fe" }; // 수(검정/파랑)
+    return { color: "#333", bg: "#fff" };
   }
 
-  const formatDate = (dateString: string) => {
-    const d = new Date(dateString);
-    return d.toLocaleString('ko-KR', { 
-      month: 'numeric', day: 'numeric', 
-      hour: '2-digit', minute: '2-digit',
-      hour12: false 
-    });
+  const ManseCell = ({ char }: { char: string }) => {
+    const style = getElementColor(char);
+    return (
+      <td style={{ 
+        padding: '15px 5px', border: '1px solid #eee', textAlign: 'center', 
+        fontSize: '20px', fontWeight: 'bold', color: style.color, backgroundColor: style.bg 
+      }}>
+        {char}
+      </td>
+    );
   }
-
-  const labelStyle = { display: 'block', marginBottom: '8px', fontWeight: 'bold' as const, color: '#555', fontSize: '14px' };
-  const inputStyle = { width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #ddd', color: '#000', fontSize: '16px', boxSizing: 'border-box' as const, backgroundColor: '#fff' };
 
   return (
-    <div style={{ backgroundColor: '#f0f2f5', minHeight: '100vh', padding: '15px', color: '#333' }}>
-      <div style={{ maxWidth: '480px', margin: '0 auto', backgroundColor: '#ffffff', padding: '25px', borderRadius: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.08)' }}>
-        
-        <h1 style={{ textAlign: 'center', color: '#1a1a1a', marginBottom: '5px', fontSize: '26px' }}>🔮 AI 사주 상담소</h1>
-        <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '30px' }}>당신의 운명을 기록하는 가장 스마트한 방법</p>
-        
-        {!user ? (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <button onClick={handleLogin} style={{ width: '100%', padding: '18px', fontSize: '18px', background: '#FEE500', color: '#3c1e1e', border: 'none', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold' }}>
-              카카오로 시작하기
-            </button>
+    <div style={{ backgroundColor: '#F8F9FB', minHeight: '100vh', paddingBottom: '50px' }}>
+      {/* 상단 노란색 배너 영역 */}
+      <div style={{ backgroundColor: '#FFD400', padding: '50px 20px 30px', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 10px' }}>
+          {user?.user_metadata?.full_name || '손님'}님의 운세 해설
+        </h1>
+        <div style={{ fontSize: '14px', opacity: 0.8 }}>
+          {formData.year || '0000'}년 {formData.month || '0'}월 {formData.day || '0'}일생 · {formData.gender === 'male' ? '남성' : '여성'}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: '480px', margin: '-20px auto 0', padding: '0 16px' }}>
+        {!analysis ? (
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <input type="number" placeholder="출생년도(4자리)" style={{ padding: '14px', borderRadius: '12px', border: '1px solid #ddd' }} onChange={e => setFormData({...formData, year: e.target.value})} />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input type="number" placeholder="월" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd' }} onChange={e => setFormData({...formData, month: e.target.value})} />
+                <input type="number" placeholder="일" style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd' }} onChange={e => setFormData({...formData, day: e.target.value})} />
+              </div>
+              <button onClick={handleAnalyze} disabled={loading} style={{ padding: '18px', background: '#1a1a1a', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: 'bold', fontSize: '16px', marginTop: '10px' }}>
+                {loading ? '운명 분석 중...' : '무료 사주 풀이 보기'}
+              </button>
+            </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <label style={labelStyle}>태어난 연도</label>
-              <input type="number" placeholder="YYYY" value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} style={inputStyle} />
-            </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>월</label>
-                <input type="number" placeholder="MM" value={formData.month} onChange={e => setFormData({...formData, month: e.target.value})} style={inputStyle} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>일</label>
-                <input type="number" placeholder="DD" value={formData.day} onChange={e => setFormData({...formData, day: e.target.value})} style={inputStyle} />
-              </div>
-            </div>
-            <div>
-              <label style={labelStyle}>태어난 시간</label>
-              <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} style={inputStyle} />
-            </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} style={inputStyle}><option value="male">남성</option><option value="female">여성</option></select>
-              <select value={formData.calendarType} onChange={e => setFormData({...formData, calendarType: e.target.value})} style={inputStyle}><option value="solar">양력</option><option value="lunar">음력</option></select>
+          <>
+            {/* 만세력 테이블 */}
+            <div style={{ backgroundColor: '#fff', borderRadius: '20px', overflow: 'hidden', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+              <div style={{ backgroundColor: '#222', color: '#fff', padding: '10px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold' }}>만세력 분석</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#fdfdfd' }}>
+                    {['시주','일주','월주','연주'].map(t => <th key={t} style={{ padding: '10px', fontSize: '11px', color: '#999', fontWeight: 'normal', border: '1px solid #eee' }}>{t}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <ManseCell char={analysis.manse.time_top} />
+                    <ManseCell char={analysis.manse.day_top} />
+                    <ManseCell char={analysis.manse.month_top} />
+                    <ManseCell char={analysis.manse.year_top} />
+                  </tr>
+                  <tr>
+                    <ManseCell char={analysis.manse.time_bottom} />
+                    <ManseCell char={analysis.manse.day_bottom} />
+                    <ManseCell char={analysis.manse.month_bottom} />
+                    <ManseCell char={analysis.manse.year_bottom} />
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            <button onClick={handleSaveAndAnalyze} disabled={loading} style={{ padding: '20px', background: loading ? '#ccc' : 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold' }}>
-              {loading ? '🔮 운세 분석 중...' : '운세 분석 및 결과 저장'}
-            </button>
-
-            {fortune && (
-              <div style={{ marginTop: '20px', padding: '25px', backgroundColor: '#fff9eb', borderRadius: '20px', border: '1px solid #f3e1a0' }}>
-                <h2 style={{ marginTop: 0, color: '#856404', fontSize: '19px' }}>📜 2026년 운세 풀이</h2>
-                <div style={{ whiteSpace: 'pre-wrap', color: '#333', lineHeight: '1.8', fontSize: '15px' }}>{fortune}</div>
-              </div>
-            )}
-
-            <hr style={{ width: '100%', margin: '30px 0', border: '0', borderTop: '1px solid #eee' }} />
-            <h3 style={{ color: '#888', fontSize: '15px' }}>🕒 최근 저장된 기록 (최근 100개)</h3>
-            <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '5px' }}>
-              {logs.length > 0 ? logs.map((log: any) => (
-                <div key={log.id} style={{ fontSize: '13px', backgroundColor: '#f9f9f9', padding: '14px', borderRadius: '12px', marginBottom: '10px', color: '#555', border: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontWeight: 'bold', color: '#333' }}>📅 {log.birth_year}.{log.birth_month}.{log.birth_day}</span>
-                    <span style={{ fontSize: '11px', color: '#aaa' }}>{log.gender === 'male' ? '남성' : '여성'} · {log.calendar_type === 'solar' ? '양력' : '음력'}</span>
+            {/* 아코디언 테마 리스트 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {analysis.themes.map((item: any, idx: number) => (
+                <div key={idx} style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #edf2f7', overflow: 'hidden' }}>
+                  <div 
+                    onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
+                    style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                  >
+                    <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#333' }}>{item.title}</span>
+                    <span style={{ transform: openIndex === idx ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.2s', fontSize: '12px' }}>▼</span>
                   </div>
-                  <span style={{ fontSize: '11px', color: '#999', backgroundColor: '#fff', padding: '4px 8px', borderRadius: '20px', border: '1px solid #eee' }}>{formatDate(log.created_at)}</span>
+                  {openIndex === idx && (
+                    <div style={{ padding: '0 20px 20px', fontSize: '14.5px', lineHeight: '1.8', color: '#4a5568', whiteSpace: 'pre-wrap' }}>
+                      {item.content}
+                    </div>
+                  )}
                 </div>
-              )) : <p style={{ fontSize: '13px', color: '#ccc', textAlign: 'center' }}>기록이 없습니다.</p>}
+              ))}
             </div>
-          </div>
+            
+            <button onClick={() => setAnalysis(null)} style={{ width: '100%', marginTop: '30px', padding: '15px', background: 'none', border: '1px solid #ddd', borderRadius: '12px', color: '#888' }}>
+              새로 분석하기
+            </button>
+          </>
         )}
       </div>
     </div>
