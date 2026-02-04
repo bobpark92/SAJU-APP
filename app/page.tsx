@@ -22,7 +22,7 @@ export default function Home() {
   }, [])
 
   const handleAnalyze = async () => {
-    if (!formData.year || !formData.month || !formData.day) return alert('정보를 모두 입력해주세요!');
+    if (!formData.year || !formData.month || !formData.day) return alert('정보를 입력해 주세요!');
     setLoading(true);
     setAnalysis(null);
 
@@ -33,9 +33,7 @@ export default function Home() {
         body: JSON.stringify(formData),
       });
       const data = await response.json();
-      
-      // AI 응답 파싱 및 상태 저장
-      const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+      const parsed = JSON.parse(data.result);
       setAnalysis(parsed);
 
       await supabase.from('user_history').insert({
@@ -43,22 +41,17 @@ export default function Home() {
         birth_year: formData.year,
         birth_month: formData.month,
         birth_day: formData.day,
-        birth_time: formData.time || null,
-        gender: formData.gender,
-        calendar_type: formData.calendarType,
-        fortune_result: JSON.stringify(parsed),
-        prompt_sent: data.promptSent
+        fortune_result: data.result,
       });
     } catch (err) {
-      console.error("Error:", err);
-      alert('분석 결과 데이터를 읽어오는데 실패했습니다.');
+      alert('분석 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
   }
 
   const getElementColor = (char: string) => {
-    if (!char || char === '-' || char === '??') return { color: "#94A3B8", bg: "#F8FAFC" };
+    if (!char || char === '-') return { color: "#94A3B8", bg: "#F8FAFC" };
     if ("甲乙寅卯".includes(char)) return { color: "#2d6a4f", bg: "#e8f5e9" };
     if ("丙丁巳午".includes(char)) return { color: "#ae2012", bg: "#fff0f0" };
     if ("戊己辰戌丑未".includes(char)) return { color: "#9c6644", bg: "#fdf5e6" };
@@ -76,9 +69,9 @@ export default function Home() {
   return (
     <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '60px', color: '#3E3A31' }}>
       
-      <div style={{ backgroundColor: '#F2EFE9', padding: '50px 20px 40px', textAlign: 'center', borderBottom: '1px solid #E5E1D8' }}>
+      <div style={{ backgroundColor: '#F2EFE9', padding: '60px 20px 40px', textAlign: 'center', borderBottom: '1px solid #E5E1D8' }}>
         <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '-1.2px' }}>당분간무료사주</h1>
-        <p style={{ color: '#8A8271', marginTop: '8px', fontSize: '14px' }}>품격 있는 무료 운세 상담소</p>
+        <p style={{ color: '#8A8271', marginTop: '8px', fontSize: '14px' }}>라이브러리 기반 정밀 명식 분석</p>
       </div>
 
       <div style={{ maxWidth: '480px', margin: '-20px auto 0', padding: '0 16px' }}>
@@ -107,15 +100,14 @@ export default function Home() {
                 </div>
               </div>
               <button onClick={handleAnalyze} disabled={loading} style={{ padding: '20px', background: '#3E3A31', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '800', fontSize: '16px', marginTop: '10px' }}>
-                {loading ? '🔮 명반을 구성하는 중...' : '운세 무료 분석하기'}
+                {loading ? '🔮 정밀 분석 중...' : '운세 분석 결과 확인'}
               </button>
             </div>
           </div>
         ) : (
           <>
-            {/* 만세력 영역 보완 */}
             <div style={{ backgroundColor: '#fff', borderRadius: '20px', overflow: 'hidden', marginBottom: '20px', border: '1px solid #E5E1D8' }}>
-              <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '10px', textAlign: 'center', fontSize: '11px', fontWeight: '700' }}>사주 팔자 명식</div>
+              <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '10px', textAlign: 'center', fontSize: '11px', fontWeight: '700' }}>라이브러리 정밀 명식</div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#F9F7F2' }}>
@@ -123,27 +115,22 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* 천간 라인 */}
                   <tr>
-                    {[analysis.manse?.time_top, analysis.manse?.day_top, analysis.manse?.month_top, analysis.manse?.year_top].map((char, i) => {
-                      const s = getElementColor(char || '-');
-                      return <td key={i} style={{ padding: '15px 0', textAlign: 'center', fontSize: '22px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
-                    })}
+                    {[analysis.manse.time_top, analysis.manse.day_top, analysis.manse.month_top, analysis.manse.year_top].map((char, i) => (
+                      <td key={i} style={{ padding: '15px 0', textAlign: 'center', fontSize: '22px', fontWeight: '900', color: getElementColor(char).color, backgroundColor: getElementColor(char).bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
+                    ))}
                   </tr>
-                  {/* 지지 라인 */}
                   <tr>
-                    {[analysis.manse?.time_bottom, analysis.manse?.day_bottom, analysis.manse?.month_bottom, analysis.manse?.year_bottom].map((char, i) => {
-                      const s = getElementColor(char || '-');
-                      return <td key={i} style={{ padding: '15px 0', textAlign: 'center', fontSize: '22px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
-                    })}
+                    {[analysis.manse.time_bottom, analysis.manse.day_bottom, analysis.manse.month_bottom, analysis.manse.year_bottom].map((char, i) => (
+                      <td key={i} style={{ padding: '15px 0', textAlign: 'center', fontSize: '22px', fontWeight: '900', color: getElementColor(char).color, backgroundColor: getElementColor(char).bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
+                    ))}
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            {/* 아코디언 테마 리스트 */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {analysis.themes?.map((item: any, idx: number) => (
+              {analysis.themes.map((item: any, idx: number) => (
                 <div key={idx} style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #E5E1D8', overflow: 'hidden' }}>
                   <div 
                     onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
