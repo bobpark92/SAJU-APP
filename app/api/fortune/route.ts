@@ -12,49 +12,49 @@ export async function POST(request: Request) {
     const { year, month, day, time, gender, calendarType } = body;
 
     const prompt = `
-      당신은 사주팔자와 만세력 전문가입니다. 사용자의 정보를 바탕으로 분석 결과를 **반드시 JSON 형식**으로만 답변하세요.
+      당신은 대한민국 최고의 스타 사주 상담가이자 '현대판 도사'입니다. 
+      사용자의 정보를 바탕으로 소름 돋을 정도로 정확하고 매력적인 분석 결과를 **JSON 형식**으로만 답변하세요.
 
-      사용자 정보:
+      [사용자 정보]
       - 생년월일: ${year}년 ${month}월 ${day}일 (${calendarType === 'solar' ? '양력' : '음력'})
-      - 시간: ${time || '모름'}
+      - 태어난 시간: ${time || '모름'}
       - 성별: ${gender === 'male' ? '남성' : '여성'}
 
-      분석 지침:
-      1. 'manse' 객체에는 연주, 월주, 일주의 천간과 지지를 각각 1글자의 한자로 포함하세요. (시주는 모를 경우 '-' 처리)
-      2. 'themes' 배열에는 최소 6개의 분석 테마를 넣으세요.
-      3. 각 테마의 'title'은 "화려한 조명 속에서 칼춤 추는 승부사" 같이 아주 매력적이고 은유적인 소제목으로 지으세요.
-      4. 'content'는 해당 테마에 대한 심층적인 분석 내용을 '도사님' 말투로 상세히 적으세요.
-      5. 각 테마안에서는 최소 공백포함 600자가 되도록 설명해줘 
-      6. 사람들이 테마안의 설명을 볼때 사주내용이 어려울 수 있으니, 쉽게 표현하고 구체적인 예시를 들어줘서 설명해주는것도 좋아. 
+      [작성 지침 - 반드시 지킬 것]
+      1. 테마 구성: 반드시 12개~13개의 테마로 구성하세요.
+      2. 테마 제목: "브레이크 없는 페라리", "팩폭 주의: 겉은 양반, 속은 시한폭탄" 같이 현대적이고 감각적인 비유를 사용하세요.
+      3. 말투: 구어체와 문어체를 섞어 전문적이면서도 친근하게(도사님 말투) 작성하세요. 팩폭(날카로운 지적)과 따뜻한 위로를 적절히 배치하세요.
+      4. 명리학적 근거: 각 해설에는 반드시 관련 명리학 용어(십성, 신살, 오행의 합/충 등)를 언급하며 논리적으로 풀이하세요.
+      5. 가독성: 각 테마의 내용은 600자 이상의 풍부한 분량으로 작성하고, 문단 구분을 확실히 하세요.
+      6. 각 테마에 예시를 풀어서 설명해주면서, 사주를 처음보는 사람들도 알아듣기 편하도록 설명하세요. 
 
-      응답 예시 형식:
-      {
-        "manse": {
-          "year_top": "壬", "year_bottom": "申",
-          "month_top": "壬", "month_bottom": "寅",
-          "day_top": "丁", "day_bottom": "巳",
-          "time_top": "-", "time_bottom": "-"
-        },
-        "themes": [
-          { "title": "소제목1", "content": "내용1" },
-          { "title": "소제목2", "content": "내용2" }
-        ]
-      }
+      [JSON 구조]
+            {
+              "manse": { ... },
+              "themes": [
+                { 
+                  "icon": "🚀", 
+                  "title": "브레이크 없는 페라리", 
+                  "content": "상세한 해설 내용..." 
+                },
+                ... (총 13개)
+              ]
+            }
+
+            [아이콘 지침]
+            각 테마의 성격에 가장 잘 어울리는 이모지를 하나씩 골라 'icon' 필드에 넣어주세요.
+            예: 돈 관련은 💰, 성격 팩폭은 ⚡, 이동/역마는 ✈️ 등.
     `;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o", // 더 정교한 분석을 위해 gpt-4o 권장
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" }, // JSON 출력 강제
-      temperature: 0.7,
+      response_format: { type: "json_object" },
+      temperature: 0.8,
     });
 
     const result = completion.choices[0].message.content;
-
-    return NextResponse.json({ 
-      result: result, // JSON 문자열
-      promptSent: prompt 
-    });
+    return NextResponse.json({ result: result, promptSent: prompt });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
