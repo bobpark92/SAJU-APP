@@ -69,13 +69,13 @@ export async function POST(request: Request) {
       6. 각 테마는 최소 700자의 긴 문장으로 표현해야함 
       7. 마치 상대방을 간파하는것처럼 상대방의 성격과 성향 그리고 능력등을 열거하고, 이를 명리학적으로 분석
       8. 사주를 처음보는 사람도 편하게 볼 수 있게끔, 쉽게 설명하는 센스도 들어가야함. 
-      
+
       [JSON 구조]
       {
         "manse": ${JSON.stringify(manseData)},
         "themes": [
           { "icon": "이모지", "title": "비유적 제목", "content": "명리학적 근거가 담긴 깊이 있는 해설" }
-        ]
+        ]...(13개)
       }
     `;
     const completion = await openai.chat.completions.create({
