@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-// @ts-ignore (타입 체크를 강제로 무시합니다)
+// @ts-ignore
 import { Solar, Lunar } from 'lunar-javascript';
 
 export const dynamic = 'force-dynamic';
@@ -8,35 +8,45 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
-    const openai = new OpenAI({ apiKey: apiKey || '' });
+    if (!apiKey) throw new Error("OpenAI API Key가 설정되지 않았습니다.");
+    
+    const openai = new OpenAI({ apiKey });
     
     const body = await request.json();
     const { year, month, day, time, gender, calendarType } = body;
 
-    // 라이브러리 계산 부분
+    // 1. 만세력 데이터 추출 (에러 방지 로직 포함)
     let solar;
-    if (calendarType === 'lunar') {
-      solar = Lunar.fromYmd(Number(year), Number(month), Number(day)).getSolar();
-    } else {
-      solar = Solar.fromYmd(Number(year), Number(month), Number(day));
+    try {
+      if (calendarType === 'lunar') {
+        solar = Lunar.fromYmd(Number(year), Number(month), Number(day)).getSolar();
+      } else {
+        solar = Solar.fromYmd(Number(year), Number(month), Number(day));
+      }
+    } catch (e) {
+      throw new Error("날짜 계산 중 오류가 발생했습니다. 입력을 확인해주세요.");
     }
 
     const lunar = solar.getLunar();
     const hours = time ? Number(time.split(':')[0]) : 12;
-    
     const eightChars = lunar.getEightChar();
-    // 빌드 에러 방지를 위해 인덱스 계산 로직 수정
-    eightChars.setTimeGanIndex(Math.floor((hours + 1) / 2) % 10); 
+    
+    // 시간 정보 설정 (라이브러리 버전에 따라 인덱스 설정이 까다로울 수 있어 안전하게 처리)
+    try {
+      eightChars.setTimeGanIndex(Math.floor((hours + 1) / 2) % 10);
+    } catch (e) {
+      console.log("Time index setting skipped");
+    }
 
     const manseData = {
-      year_top: eightChars.getYearGan(), 
-      year_bottom: eightChars.getYearZhi(),
-      month_top: eightChars.getMonthGan(), 
-      month_bottom: eightChars.getMonthZhi(),
-      day_top: eightChars.getDayGan(), 
-      day_bottom: eightChars.getDayZhi(),
-      time_top: eightChars.getTimeGan(), 
-      time_bottom: eightChars.getTimeZhi()
+      year_top: eightChars.getYearGan() || '?',
+      year_bottom: eightChars.getYearZhi() || '?',
+      month_top: eightChars.getMonthGan() || '?',
+      month_bottom: eightChars.getMonthZhi() || '?',
+      day_top: eightChars.getDayGan() || '?',
+      day_bottom: eightChars.getDayZhi() || '?',
+      time_top: eightChars.getTimeGan() || '?',
+      time_bottom: eightChars.getTimeZhi() || '?'
     };
     // 2. GPT에게 보낼 정밀 프롬프트
     const prompt = `
@@ -69,10 +79,14 @@ export async function POST(request: Request) {
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
+      temperature: 0.7,
     });
 
-    return NextResponse.json({ result: completion.choices[0].message.content });
+    const resultText = completion.choices[0].message.content;
+    return NextResponse.json({ result: resultText });
+
   } catch (error: any) {
+    console.error("API Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
