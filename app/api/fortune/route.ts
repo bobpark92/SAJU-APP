@@ -81,10 +81,11 @@ export async function POST(request: Request) {
       }
     `;
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o", // gpt-4o가 가장 길고 똑똑하게 대답합니다.
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.8, // 창의성과 풍부한 표현을 위해 약간 높임
+      max_tokens: 4000, // 답변 길이를 충분히 확보
     });
 
     const resultText = completion.choices[0].message.content;
