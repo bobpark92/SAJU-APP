@@ -24,12 +24,19 @@ export default function Home() {
     fetchLogs()
   }, [])
 
+  // 💡 기록을 가져올 때 개수 제한을 100개로 대폭 늘렸습니다.
   const fetchLogs = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_history')
       .select('*')
       .order('created_at', { ascending: false })
-    if (data) setLogs(data)
+      .limit(100); // 20개에서 100개로 변경
+      
+    if (error) {
+      console.error("기록 불러오기 실패:", error.message);
+    } else if (data) {
+      setLogs(data)
+    }
   }
 
   const handleSaveAndAnalyze = async () => {
@@ -51,7 +58,7 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || '분석 실패');
 
-      // 2. Supabase에 모든 기록 저장 (created_at은 DB에서 자동으로 now() 처리됨)
+      // 2. Supabase 저장
       const { error: dbError } = await supabase.from('user_history').insert({
         user_id: user.id,
         birth_year: formData.year,
@@ -65,13 +72,14 @@ export default function Home() {
         fortune_result: data.result
       });
 
-      if (dbError) console.error("DB 저장 실패:", dbError);
+      if (dbError) throw new Error(dbError.message);
 
       setFortune(data.result);
-      fetchLogs(); // 저장 후 목록 새로고침
+      // 💡 저장 후 즉시 최신 목록을 다시 가져옵니다.
+      await fetchLogs(); 
     } catch (err: any) {
       console.error(err);
-      setFortune(`❌ 오류가 발생했습니다: ${err.message}`);
+      alert(`오류: ${err.message}`);
     } finally {
       setLoading(false)
     }
@@ -84,10 +92,13 @@ export default function Home() {
     })
   }
 
-  // 헬퍼 함수: 날짜 포맷 (기록 확인용)
   const formatDate = (dateString: string) => {
     const d = new Date(dateString);
-    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes()}`;
+    return d.toLocaleString('ko-KR', { 
+      month: 'numeric', day: 'numeric', 
+      hour: '2-digit', minute: '2-digit',
+      hour12: false 
+    });
   }
 
   const labelStyle = { display: 'block', marginBottom: '8px', fontWeight: 'bold' as const, color: '#555', fontSize: '14px' };
@@ -132,7 +143,7 @@ export default function Home() {
             </div>
 
             <button onClick={handleSaveAndAnalyze} disabled={loading} style={{ padding: '20px', background: loading ? '#ccc' : 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold' }}>
-              {loading ? '🔮 운세 기록 및 분석 중...' : '운세 분석 및 결과 저장'}
+              {loading ? '🔮 운세 분석 중...' : '운세 분석 및 결과 저장'}
             </button>
 
             {fortune && (
@@ -143,12 +154,15 @@ export default function Home() {
             )}
 
             <hr style={{ width: '100%', margin: '30px 0', border: '0', borderTop: '1px solid #eee' }} />
-            <h3 style={{ color: '#888', fontSize: '15px' }}>🕒 최근 저장된 기록</h3>
-            <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
-              {logs.length > 0 ? logs.slice(0, 5).map((log: any) => (
-                <div key={log.id} style={{ fontSize: '13px', backgroundColor: '#f9f9f9', padding: '14px', borderRadius: '12px', marginBottom: '10px', color: '#555', border: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>📅 {log.birth_year}.{log.birth_month}.{log.birth_day}</span>
-                  <span style={{ fontSize: '11px', color: '#999' }}>{formatDate(log.created_at)} 조회</span>
+            <h3 style={{ color: '#888', fontSize: '15px' }}>🕒 최근 저장된 기록 (최근 100개)</h3>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '5px' }}>
+              {logs.length > 0 ? logs.map((log: any) => (
+                <div key={log.id} style={{ fontSize: '13px', backgroundColor: '#f9f9f9', padding: '14px', borderRadius: '12px', marginBottom: '10px', color: '#555', border: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontWeight: 'bold', color: '#333' }}>📅 {log.birth_year}.{log.birth_month}.{log.birth_day}</span>
+                    <span style={{ fontSize: '11px', color: '#aaa' }}>{log.gender === 'male' ? '남성' : '여성'} · {log.calendar_type === 'solar' ? '양력' : '음력'}</span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#999', backgroundColor: '#fff', padding: '4px 8px', borderRadius: '20px', border: '1px solid #eee' }}>{formatDate(log.created_at)}</span>
                 </div>
               )) : <p style={{ fontSize: '13px', color: '#ccc', textAlign: 'center' }}>기록이 없습니다.</p>}
             </div>
