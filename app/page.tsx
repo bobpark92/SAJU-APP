@@ -22,7 +22,7 @@ export default function Home() {
   }, [])
 
   const handleAnalyze = async () => {
-    if (!formData.year || !formData.month || !formData.day) return alert('정보를 정확히 입력해주세요!');
+    if (!formData.year || !formData.month || !formData.day) return alert('정보를 모두 입력해주세요!');
     setLoading(true);
     setAnalysis(null);
 
@@ -33,7 +33,9 @@ export default function Home() {
         body: JSON.stringify(formData),
       });
       const data = await response.json();
-      const parsed = JSON.parse(data.result);
+      
+      // AI 응답 파싱 및 상태 저장
+      const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
       setAnalysis(parsed);
 
       await supabase.from('user_history').insert({
@@ -44,128 +46,115 @@ export default function Home() {
         birth_time: formData.time || null,
         gender: formData.gender,
         calendar_type: formData.calendarType,
-        fortune_result: data.result,
+        fortune_result: JSON.stringify(parsed),
         prompt_sent: data.promptSent
       });
     } catch (err) {
-      alert('분석 중 오류가 발생했습니다.');
+      console.error("Error:", err);
+      alert('분석 결과 데이터를 읽어오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
   }
 
   const getElementColor = (char: string) => {
-    if (!char || char === '-') return { color: "#94A3B8", bg: "#F8FAFC" };
+    if (!char || char === '-' || char === '??') return { color: "#94A3B8", bg: "#F8FAFC" };
     if ("甲乙寅卯".includes(char)) return { color: "#2d6a4f", bg: "#e8f5e9" };
     if ("丙丁巳午".includes(char)) return { color: "#ae2012", bg: "#fff0f0" };
     if ("戊己辰戌丑未".includes(char)) return { color: "#9c6644", bg: "#fdf5e6" };
     if ("庚辛申酉".includes(char)) return { color: "#495057", bg: "#f8f9fa" };
     if ("壬癸亥子".includes(char)) return { color: "#003049", bg: "#e0f2fe" };
-    return { color: "#1E293B", bg: "#F1F5F9" };
+    return { color: "#3E3A31", bg: "#F1F5F9" };
   }
 
   const inputStyle = {
-    width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0',
+    width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid #E5E1D8',
     fontSize: '16px', backgroundColor: '#FFFFFF', color: '#1E293B', boxSizing: 'border-box' as const,
-    outline: 'none', appearance: 'none' as const
+    outline: 'none'
   };
 
   return (
-    <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '80px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+    <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '60px', color: '#3E3A31' }}>
       
-      {/* Header - 세련된 샌드 베이지 톤 */}
-      <div style={{ backgroundColor: '#F2EFE9', padding: '60px 24px 40px', textAlign: 'center', borderBottom: '1px solid #E5E1D8' }}>
-        <h1 style={{ fontSize: '26px', fontWeight: '900', color: '#3E3A31', margin: 0, letterSpacing: '-1.5px' }}>
-          당분간무료사주
-        </h1>
-        <p style={{ color: '#8A8271', marginTop: '10px', fontSize: '15px', fontWeight: '500' }}>
-          {analysis ? `${user?.user_metadata?.full_name || '귀하'}님의 명반` : "복채 없이 봐드리는 고퀄리티 사주 해설"}
-        </p>
+      <div style={{ backgroundColor: '#F2EFE9', padding: '50px 20px 40px', textAlign: 'center', borderBottom: '1px solid #E5E1D8' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0, letterSpacing: '-1.2px' }}>당분간무료사주</h1>
+        <p style={{ color: '#8A8271', marginTop: '8px', fontSize: '14px' }}>품격 있는 무료 운세 상담소</p>
       </div>
 
-      <div style={{ maxWidth: '480px', margin: '-20px auto 0', padding: '0 16px', boxSizing: 'border-box' }}>
+      <div style={{ maxWidth: '480px', margin: '-20px auto 0', padding: '0 16px' }}>
         
         {!analysis ? (
-          <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '28px', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', border: '1px solid #E5E1D8' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '24px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', border: '1px solid #E5E1D8' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
-                <label style={{ fontSize: '14px', fontWeight: '700', color: '#3E3A31', display: 'block', marginBottom: '8px' }}>생년월일</label>
+                <label style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px', display: 'block' }}>생년월일</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input type="number" placeholder="YYYY" style={inputStyle} onChange={e => setFormData({...formData, year: e.target.value})} />
-                  <input type="number" placeholder="MM" style={inputStyle} onChange={e => setFormData({...formData, month: e.target.value})} />
-                  <input type="number" placeholder="DD" style={inputStyle} onChange={e => setFormData({...formData, day: e.target.value})} />
+                  <input type="number" placeholder="년" style={inputStyle} onChange={e => setFormData({...formData, year: e.target.value})} />
+                  <input type="number" placeholder="월" style={inputStyle} onChange={e => setFormData({...formData, month: e.target.value})} />
+                  <input type="number" placeholder="일" style={inputStyle} onChange={e => setFormData({...formData, day: e.target.value})} />
                 </div>
               </div>
-
-              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '14px', fontWeight: '700', color: '#3E3A31', display: 'block', marginBottom: '8px' }}>태어난 시간</label>
+                  <label style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px', display: 'block' }}>태어난 시간</label>
                   <input type="time" style={inputStyle} onChange={e => setFormData({...formData, time: e.target.value})} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '14px', fontWeight: '700', color: '#3E3A31', display: 'block', marginBottom: '8px' }}>성별</label>
+                  <label style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px', display: 'block' }}>성별</label>
                   <select style={inputStyle} value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
                     <option value="male">남성</option><option value="female">여성</option>
                   </select>
                 </div>
               </div>
-
-              <div>
-                <label style={{ fontSize: '14px', fontWeight: '700', color: '#3E3A31', display: 'block', marginBottom: '8px' }}>력</label>
-                <select style={inputStyle} value={formData.calendarType} onChange={e => setFormData({...formData, calendarType: e.target.value})}>
-                  <option value="solar">양력(Solar)</option><option value="lunar">음력(Lunar)</option>
-                </select>
-              </div>
-
-              <button onClick={handleAnalyze} disabled={loading} style={{ padding: '20px', background: '#3E3A31', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '800', fontSize: '17px', cursor: 'pointer', marginTop: '10px', boxShadow: '0 4px 12px rgba(62, 58, 49, 0.2)' }}>
-                {loading ? '🔮 운세를 짓고 있습니다...' : '내 운세 무료로 보기'}
+              <button onClick={handleAnalyze} disabled={loading} style={{ padding: '20px', background: '#3E3A31', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '800', fontSize: '16px', marginTop: '10px' }}>
+                {loading ? '🔮 명반을 구성하는 중...' : '운세 무료 분석하기'}
               </button>
             </div>
           </div>
         ) : (
           <>
-            {/* 명식 카드 (데이터 렌더링 수정) */}
-            <div style={{ backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden', marginBottom: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', border: '1px solid #E5E1D8' }}>
-              <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '14px', textAlign: 'center', fontSize: '12px', fontWeight: '700', letterSpacing: '2px' }}>八字命式 (KOREAN SAJU)</div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '300px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#F9F7F2' }}>
-                      {['시주','일주','월주','연주'].map(t => <th key={t} style={{ padding: '10px', fontSize: '11px', color: '#8A8271', border: '1px solid #E5E1D8' }}>{t}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {[analysis.manse?.time_top, analysis.manse?.day_top, analysis.manse?.month_top, analysis.manse?.year_top].map((char, i) => {
-                        const s = getElementColor(char || '-');
-                        return <td key={i} style={{ padding: '20px 0', textAlign: 'center', fontSize: '24px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
-                      })}
-                    </tr>
-                    <tr>
-                      {[analysis.manse?.time_bottom, analysis.manse?.day_bottom, analysis.manse?.month_bottom, analysis.manse?.year_bottom].map((char, i) => {
-                        const s = getElementColor(char || '-');
-                        return <td key={i} style={{ padding: '20px 0', textAlign: 'center', fontSize: '24px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            {/* 만세력 영역 보완 */}
+            <div style={{ backgroundColor: '#fff', borderRadius: '20px', overflow: 'hidden', marginBottom: '20px', border: '1px solid #E5E1D8' }}>
+              <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '10px', textAlign: 'center', fontSize: '11px', fontWeight: '700' }}>사주 팔자 명식</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#F9F7F2' }}>
+                    {['시주','일주','월주','연주'].map(t => <th key={t} style={{ padding: '8px', fontSize: '11px', color: '#8A8271', border: '1px solid #E5E1D8', fontWeight: 'normal' }}>{t}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* 천간 라인 */}
+                  <tr>
+                    {[analysis.manse?.time_top, analysis.manse?.day_top, analysis.manse?.month_top, analysis.manse?.year_top].map((char, i) => {
+                      const s = getElementColor(char || '-');
+                      return <td key={i} style={{ padding: '15px 0', textAlign: 'center', fontSize: '22px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
+                    })}
+                  </tr>
+                  {/* 지지 라인 */}
+                  <tr>
+                    {[analysis.manse?.time_bottom, analysis.manse?.day_bottom, analysis.manse?.month_bottom, analysis.manse?.year_bottom].map((char, i) => {
+                      const s = getElementColor(char || '-');
+                      return <td key={i} style={{ padding: '15px 0', textAlign: 'center', fontSize: '22px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char || '-'}</td>
+                    })}
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            {/* 테마 리스트 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* 아코디언 테마 리스트 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {analysis.themes?.map((item: any, idx: number) => (
-                <div key={idx} style={{ backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #E5E1D8', overflow: 'hidden' }}>
+                <div key={idx} style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #E5E1D8', overflow: 'hidden' }}>
                   <div 
                     onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
-                    style={{ padding: '20px', display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}
+                    style={{ padding: '20px', display: 'flex', gap: '12px', alignItems: 'center', cursor: 'pointer' }}
                   >
-                    <div style={{ fontSize: '22px' }}>{item.icon || '📜'}</div>
-                    <span style={{ fontWeight: '800', fontSize: '16px', color: '#3E3A31', flex: 1, letterSpacing: '-0.5px' }}>{item.title}</span>
-                    <span style={{ color: '#8A8271', fontSize: '12px' }}>{openIndex === idx ? '▲' : '▼'}</span>
+                    <span style={{ fontSize: '20px' }}>{item.icon}</span>
+                    <span style={{ fontWeight: '800', fontSize: '15px', flex: 1 }}>{item.title}</span>
+                    <span style={{ fontSize: '12px', color: '#8A8271' }}>{openIndex === idx ? '▲' : '▼'}</span>
                   </div>
                   {openIndex === idx && (
-                    <div style={{ padding: '0 20px 24px 58px', fontSize: '15px', lineHeight: '1.8', color: '#5C5647', whiteSpace: 'pre-wrap', borderTop: '1px solid #F9F7F2', paddingTop: '15px' }}>
+                    <div style={{ padding: '0 20px 20px 52px', fontSize: '14.5px', lineHeight: '1.7', color: '#5C5647', whiteSpace: 'pre-wrap', borderTop: '1px solid #F9F7F2', paddingTop: '10px' }}>
                       {item.content}
                     </div>
                   )}
@@ -173,8 +162,8 @@ export default function Home() {
               ))}
             </div>
 
-            <button onClick={() => setAnalysis(null)} style={{ width: '100%', marginTop: '30px', padding: '20px', background: 'none', border: '2px solid #E5E1D8', borderRadius: '18px', color: '#8A8271', fontWeight: '700', fontSize: '15px', cursor: 'pointer' }}>
-              처음으로 돌아가기
+            <button onClick={() => setAnalysis(null)} style={{ width: '100%', marginTop: '30px', padding: '18px', background: 'none', border: '1px solid #E5E1D8', borderRadius: '16px', color: '#8A8271', fontWeight: '700' }}>
+              돌아가기
             </button>
           </>
         )}
