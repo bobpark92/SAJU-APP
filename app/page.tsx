@@ -47,7 +47,7 @@ export default function Home() {
     <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '80px', color: '#3E3A31', fontFamily: 'sans-serif' }}>
       <div style={{ padding: '60px 20px', textAlign: 'center', backgroundColor: '#F2EFE9', borderBottom: '1px solid #E5E1D8' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '900', margin: 0 }}>당분간무료사주</h1>
-        <p style={{ color: '#8A8271', marginTop: '10px' }}>3단계 정밀 분석 리포트</p>
+        <p style={{ color: '#8A8271', marginTop: '10px' }}>당분간 무료임. 근데 막쓰진 마셈  </p>
       </div>
 
       <div style={{ maxWidth: '500px', margin: '-30px auto 0', padding: '0 16px' }}>
@@ -69,7 +69,7 @@ export default function Home() {
                 </select>
               </div>
               <button onClick={handleAnalyze} disabled={loading} style={{ padding: '22px', background: '#3E3A31', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: '800', fontSize: '18px' }}>
-                {loading ? '🔮 3단계 분석 진행 중 (약 15초)...' : '정밀 분석 결과 보기'}
+                {loading ? '🔮 정밀 분석 진행 중 (시간 좀 걸림;)...' : '정밀 분석 결과 보기'}
               </button>
             </div>
           </div>
@@ -77,7 +77,7 @@ export default function Home() {
           <>
             {/* 1. 만세력 테이블 */}
             <div style={{ backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden', marginBottom: '24px', border: '1px solid #E5E1D8' }}>
-              <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>八字命式</div>
+              <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>팔자명식</div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
                   <tr>
@@ -98,7 +98,7 @@ export default function Home() {
 
             {/* 2. 대가의 평론 (TEXT 영역) */}
             <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '28px', marginBottom: '24px', border: '1px solid #E5E1D8', lineHeight: '1.8' }}>
-              <h3 style={{ marginTop: 0, color: '#3E3A31', fontSize: '19px' }}>📜 대가의 정밀 총평</h3>
+              <h3 style={{ marginTop: 0, color: '#3E3A31', fontSize: '19px' }}>📜 간략한 사주 총평</h3>
               <div style={{ color: '#5C5647', fontSize: '15px', whiteSpace: 'pre-wrap' }}>
                 {result.commentary}
               </div>
