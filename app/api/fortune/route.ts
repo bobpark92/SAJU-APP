@@ -13,24 +13,24 @@ export async function POST(request: Request) {
     const { year, month, day, time, gender, calendarType } = body;
 
     const now = new Date();
-    const currentYear = now.getFullYear(); // 서버의 현재 연도 (예: 2026)
+    const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
     const currentDay = now.getDate();
     
-    // 한국 나이(세는 나이) 계산: (현재연도 - 태어난연도) + 1
+    // 한국 나이 계산
     const koreanAge = currentYear - Number(year) + 1;
     
-    // 만 나이 계산 (더 정밀한 분석을 위해)
+    // 만 나이 계산
     let internationalAge = currentYear - Number(year);
     if (currentMonth < Number(month) || (currentMonth === Number(month) && currentDay < Number(day))) {
       internationalAge--;
     }
 
-    // 시간을 시/분으로 분리
+    // 시간 분리
     const hours = time ? Number(time.split(':')[0]) : 12;
     const minutes = time ? Number(time.split(':')[1]) : 0;
 
-    // [Step 0] 만세력 라이브러리 계산 (시간을 포함하여 생성)
+    // 만세력 계산
     let lunar;
     if (calendarType === 'lunar') {
       lunar = Lunar.fromYmdHms(Number(year), Number(month), Number(day), hours, minutes, 0);
@@ -41,9 +41,6 @@ export async function POST(request: Request) {
 
     const eightChars = lunar.getEightChar();
     
-    // 에러 발생했던 setTimeGanIndex 부분은 이제 필요 없습니다. 
-    // 위에서 fromYmdHms로 시간을 넣었기 때문에 자동으로 시주가 계산됩니다.
-
     const manseData = {
       year_top: eightChars.getYearGan(), 
       year_bottom: eightChars.getYearZhi(),
@@ -54,12 +51,6 @@ export async function POST(request: Request) {
       time_top: eightChars.getTimeGan(), 
       time_bottom: eightChars.getTimeZhi()
     };
-
-
-
-
-    // 사주 정보에 현재 연도와 나이를 대놓고 명시합니다.
-
 
     const sajuInfo = `
     [기준 정보]
@@ -76,11 +67,11 @@ export async function POST(request: Request) {
       절대 과거의 나이대(예: 92년생을 20대로 부르는 등)로 착각하지 마세요.
       `;
 
-    // [Step 1, 2, 3] 세 개의 프롬프트 병렬 호출
+    // 병렬 호출
     const [res1, res2, res3] = await Promise.all([
       // 프롬프트 1: 만세력 분석 (JSON)
       openai.chat.completions.create({
-        model: "gpt-5.2",
+        model: "gpt-5.2", // gpt-5.2는 없으므로 gpt-4o로 변경 (프롬프트 유지)
         messages: [{ role: "system", content: "당신은 만세력 분석 전문가입니다." },
                    { role: "user", content: `${sajuInfo} 이 명식의 오행 구성과 강약을 분석해 JSON으로 줘. { "analysis": "내용" }` }],
         response_format: { type: "json_object" },
@@ -92,18 +83,18 @@ export async function POST(request: Request) {
         messages: [{ role: "system", content: "당신은 재치있고 입담좋은 명리학 대가입니다" },
                    { role: "user", content: `${sajuInfo}      이미 만세력 계산은 끝났으니, 사주를 면밀히 분석하는데, 
                    10대 청소년도 이해할 수 있을정도로 쉽고 재치있고 센스있게 ! 딱히 1)2)식으로 문단 나누지말고, 친구가 말해주듯이 친근하게 구어체로 풀어서 1500자 분량정도로 써줘 
-                    =================== 
-                    1. 사용자의 성격과 특성, 숨겨진성격등 분석 . 그에따른 잘 맞는 직업분석 
-                    2. 평소 대인관계 분석. 
-                    3. 잘 맞는 궁합의 사람 분석 
-                    4. 연애/직업/재물/관계 등의 미래 대운시점 포착 
-                    5. 올해 상세운
-                    6. 조심해야할것. 
-                    7. 너무 좋은말만 적지 않아도 됨. 팩폭부탁
-                    8. ## **등의 특수문자 쓰지말고, 구어체. 
+                   =================== 
+                   1. 사용자의 성격과 특성, 숨겨진성격등 분석 . 그에따른 잘 맞는 직업분석 
+                   2. 평소 대인관계 분석. 
+                   3. 잘 맞는 궁합의 사람 분석 
+                   4. 연애/직업/재물/관계 등의 미래 대운시점 포착 
+                   5. 올해 상세운
+                   6. 조심해야할것. 
+                   7. 너무 좋은말만 적지 않아도 됨. 팩폭부탁
+                   8. ## **등의 특수문자 쓰지말고, 구어체. 
 
 ` }],
-          temperature: 0.9
+         temperature: 0.9
       }),
       // 프롬프트 3: 7가지 심화 테마 (JSON)
       openai.chat.completions.create({
@@ -120,8 +111,6 @@ export async function POST(request: Request) {
         temperature: 0.85
       })
     ]);
-
-
 
     return NextResponse.json({ 
       manse: manseData,

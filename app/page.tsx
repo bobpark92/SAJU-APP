@@ -7,11 +7,70 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 )
 
+declare global {
+  interface Window {
+    Kakao: any;
+  }
+}
+
 export default function Home() {
-  const [formData, setFormData] = useState({ year: '', month: '', day: '', time: '', gender: 'male', calendarType: 'solar' })
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  const [openIndex, setOpenIndex] = useState<number | null>(0)
+  const [user, setUser] = useState<any>(null);
+  const [formData, setFormData] = useState({ year: '', month: '', day: '', time: '', gender: 'male', calendarType: 'solar' });
+  const [loading, setLoading] = useState(false);
+  const [currentView, setCurrentView] = useState<'form' | 'result' | 'history'>('form');
+  const [result, setResult] = useState<any>(null);
+  const [historyList, setHistoryList] = useState<any[]>([]); 
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
+
+  // --- 1. 초기화 및 스크립트 로드 ---
+  useEffect(() => {
+    // 유저 세션 체크
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+    };
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    // ⭐ 카카오 스크립트 로드 (중복 방지)
+    const scriptId = 'kakao-sdk-script';
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement("script");
+      script.id = scriptId;
+      script.src = "https://t.kakao.com/sdk/js/kakao.min.js";
+      script.async = true;
+      script.onload = () => {
+        if (window.Kakao && !window.Kakao.isInitialized()) {
+          window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
+          console.log("Kakao SDK Loaded via useEffect");
+        }
+      };
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // --- 기능 함수들 ---
+  const handleKakaoLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) alert(error.message);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setCurrentView('form');
+    setResult(null);
+  };
 
   const handleAnalyze = async () => {
     if (!formData.year || !formData.month || !formData.day) return alert('생년월일을 입력해주세요!');
@@ -26,13 +85,84 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+
       setResult(data);
+      setCurrentView('result');
+
+      if (user) {
+        const kakaoId = user.user_metadata?.sub || user.identities?.find((id: any) => id.provider === 'kakao')?.id;
+        await supabase.from('fortune_logs').insert({
+          user_id: user.id,
+          user_email: user.email,
+          user_name: user.user_metadata?.full_name || user.user_metadata?.name,
+          kakao_id: kakaoId, 
+          birth_info: formData,
+          result_data: data
+        });
+      }
     } catch (err: any) {
       alert(`에러 발생: ${err.message}`);
     } finally {
       setLoading(false);
     }
   }
+
+  const fetchHistory = async () => {
+    if (!user) return alert("로그인이 필요합니다.");
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('fortune_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) alert("기록 조회 실패");
+    else {
+      setHistoryList(data || []);
+      setCurrentView('history');
+    }
+    setLoading(false);
+  };
+
+  const handleHistoryClick = (item: any) => {
+    setFormData(item.birth_info); 
+    setResult(item.result_data);  
+    setCurrentView('result');
+  };
+
+  // ⭐ 카카오 공유하기 (비상 대책 포함)
+  const handleKakaoShare = () => {
+    // 1. 만약 window.Kakao가 없다면? (애드블록이나 로딩 실패 시)
+    if (!window.Kakao) {
+       // 스크립트를 강제로 다시 만듭니다.
+       const script = document.createElement("script");
+       script.src = "https://t.kakao.com/sdk/js/kakao.min.js";
+       script.async = true;
+       script.onload = () => {
+         // 로드 다 되면 바로 실행
+         if (window.Kakao && !window.Kakao.isInitialized()) {
+            window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
+            // 재귀 호출: 다시 공유하기 함수 실행
+            handleKakaoShare();
+         }
+       };
+       document.head.appendChild(script);
+       return; // 이번 클릭은 스크립트 로딩만 하고 종료
+    }
+
+    // 2. 초기화 안 되어 있으면 초기화
+    if (!window.Kakao.isInitialized()) {
+      window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
+    }
+
+    // 3. 공유 실행
+    window.Kakao.Share.sendDefault({
+      objectType: 'text',
+      text: `[당분간무료사주] ${formData.year}년생의 운세 분석 결과가 도착했습니다!\n\n"${result?.commentary ? result.commentary.substring(0, 50) : '결과 확인하기'}..."`,
+      link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
+      buttonTitle: '바로 확인하기',
+    });
+  };
 
   const getElementColor = (char: string) => {
     if ("甲乙寅卯".includes(char)) return { color: "#2d6a4f", bg: "#e8f5e9" };
@@ -44,50 +174,77 @@ export default function Home() {
   }
 
   return (
-    <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '80px', color: '#3E3A31', fontFamily: 'sans-serif' }}>
-      <div style={{ padding: '60px 20px', textAlign: 'center', backgroundColor: '#F2EFE9', borderBottom: '1px solid #E5E1D8' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '900', margin: 0 }}>당분간무료사주</h1>
-        <p style={{ color: '#8A8271', marginTop: '10px' }}>당분간 무료임. 근데 막쓰진 마셈  </p>
+    <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '80px', color: '#3E3A31', fontFamily: 'sans-serif', position: 'relative' }}>
+      
+      {/* 헤더 */}
+      <div style={{ padding: '60px 20px 20px', textAlign: 'center', backgroundColor: '#F2EFE9', borderBottom: '1px solid #E5E1D8' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: '900', margin: 0, cursor:'pointer' }} onClick={() => setCurrentView('form')}>당분간무료사주</h1>
+        <p style={{ color: '#8A8271', marginTop: '10px' }}>당분간 무료임. 근데 막쓰진 마셈</p>
+        
+        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {!user ? (
+             <button onClick={handleKakaoLogin} style={{ padding: '10px 20px', backgroundColor: '#FEE500', border: 'none', borderRadius: '12px', color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize:'14px' }}>
+               💬 카카오 1초 로그인
+             </button>
+          ) : (
+            <>
+              <span style={{ padding: '8px', fontSize: '14px', alignSelf:'center' }}>반가워요, <b>{user.user_metadata?.full_name || '이용자'}</b>님!</span>
+              <button onClick={handleLogout} style={{ padding: '6px 12px', backgroundColor: '#e5e7eb', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize:'12px' }}>로그아웃</button>
+            </>
+          )}
+        </div>
+        
+        {user && (
+          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '30px', fontSize: '16px', fontWeight: '700' }}>
+            <span onClick={() => setCurrentView('form')} style={{ cursor: 'pointer', color: currentView === 'form' ? '#3E3A31' : '#999', borderBottom: currentView === 'form' ? '2px solid #3E3A31' : 'none', paddingBottom:'4px' }}>사주보기</span>
+            <span onClick={fetchHistory} style={{ cursor: 'pointer', color: currentView === 'history' ? '#3E3A31' : '#999', borderBottom: currentView === 'history' ? '2px solid #3E3A31' : 'none', paddingBottom:'4px' }}>나의 기록</span>
+            <span onClick={() => alert('다음 업데이트를 기대해주세요!')} style={{ cursor: 'pointer', color: '#ccc' }}>궁합(준비중)</span>
+          </div>
+        )}
       </div>
 
-      <div style={{ maxWidth: '500px', margin: '-30px auto 0', padding: '0 16px' }}>
-        {!result ? (
+      <div style={{ maxWidth: '500px', margin: '30px auto 0', padding: '0 16px' }}>
+        
+        {/* 입력 폼 */}
+        {currentView === 'form' && (
           <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', border: '1px solid #E5E1D8' }}>
-            {/* 입력 폼 (이전과 동일하므로 생략 가능, 구조 유지) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '12px', padding: '4px' }}>
                 <button onClick={() => setFormData({...formData, calendarType: 'solar'})} style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '8px', fontWeight: '700', backgroundColor: formData.calendarType === 'solar' ? '#fff' : 'transparent', color: formData.calendarType === 'solar' ? '#3E3A31' : '#94A3B8' }}>양력</button>
                 <button onClick={() => setFormData({...formData, calendarType: 'lunar'})} style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '8px', fontWeight: '700', backgroundColor: formData.calendarType === 'lunar' ? '#fff' : 'transparent', color: formData.calendarType === 'lunar' ? '#3E3A31' : '#94A3B8' }}>음력</button>
               </div>
-              <input type="number" placeholder="년(YYYY)" style={{ padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, year: e.target.value})} />
-              <input type="number" placeholder="월(MM)" style={{ padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, month: e.target.value})} />
-              <input type="number" placeholder="일(DD)" style={{ padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, day: e.target.value})} />
+              <input type="number" placeholder="년(YYYY)" value={formData.year} style={{ padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, year: e.target.value})} />
+              <input type="number" placeholder="월(MM)" value={formData.month} style={{ padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, month: e.target.value})} />
+              <input type="number" placeholder="일(DD)" value={formData.day} style={{ padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, day: e.target.value})} />
               <div style={{ display: 'flex', gap: '10px' }}>
-                <input type="time" style={{ flex: 1, padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, time: e.target.value})} />
-                <select style={{ flex: 1, padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, gender: e.target.value})}>
+                <input type="time" value={formData.time} style={{ flex: 1, padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, time: e.target.value})} />
+                <select value={formData.gender} style={{ flex: 1, padding:'16px', borderRadius:'12px', border:'1px solid #E5E1D8' }} onChange={e => setFormData({...formData, gender: e.target.value})}>
                   <option value="male">남성</option><option value="female">여성</option>
                 </select>
               </div>
-              <button onClick={handleAnalyze} disabled={loading} style={{ padding: '22px', background: '#3E3A31', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: '800', fontSize: '18px' }}>
-                {loading ? '🔮 정밀 분석 진행 중 (시간 좀 걸림;)...' : '정밀 분석 결과 보기'}
+              <button onClick={handleAnalyze} disabled={loading} style={{ padding: '22px', background: '#3E3A31', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: '800', fontSize: '18px', cursor: 'pointer' }}>
+                {loading ? '🔮 대가가 분석 중입니다...' : '정밀 분석 결과 보기'}
               </button>
+              {!user && <p style={{ fontSize:'12px', color:'#999', textAlign:'center', margin:0 }}>* 로그인하면 결과를 저장하고 다시 볼 수 있어요.</p>}
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* 결과 화면 */}
+        {currentView === 'result' && result && (
           <>
-            {/* 1. 만세력 테이블 */}
             <div style={{ backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden', marginBottom: '24px', border: '1px solid #E5E1D8' }}>
               <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>팔자명식</div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <tbody>
                   <tr>
-                    {[result.manse.time_top, result.manse.day_top, result.manse.month_top, result.manse.year_top].map((char, i) => {
+                    {[result.manse.time_top, result.manse.day_top, result.manse.month_top, result.manse.year_top].map((char: string, i: number) => {
                       const s = getElementColor(char);
                       return <td key={i} style={{ padding: '20px 0', textAlign: 'center', fontSize: '24px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char}</td>
                     })}
                   </tr>
                   <tr>
-                    {[result.manse.time_bottom, result.manse.day_bottom, result.manse.month_bottom, result.manse.year_bottom].map((char, i) => {
+                    {[result.manse.time_bottom, result.manse.day_bottom, result.manse.month_bottom, result.manse.year_bottom].map((char: string, i: number) => {
                       const s = getElementColor(char);
                       return <td key={i} style={{ padding: '20px 0', textAlign: 'center', fontSize: '24px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char}</td>
                     })}
@@ -96,22 +253,18 @@ export default function Home() {
               </table>
             </div>
 
-            {/* 2. 대가의 평론 (TEXT 영역) */}
             <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '28px', marginBottom: '24px', border: '1px solid #E5E1D8', lineHeight: '1.8' }}>
-              <h3 style={{ marginTop: 0, color: '#3E3A31', fontSize: '19px' }}>📜 간략한 사주 총평</h3>
-              <div style={{ color: '#5C5647', fontSize: '15px', whiteSpace: 'pre-wrap' }}>
-                {result.commentary}
-              </div>
+              <h3 style={{ marginTop: 0, color: '#3E3A31', fontSize: '19px' }}>📜 대가의 총평</h3>
+              <div style={{ color: '#5C5647', fontSize: '15px', whiteSpace: 'pre-wrap' }}>{result.commentary}</div>
             </div>
 
-            {/* 3. 심화 테마 (아코디언) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {result.themes.map((item: any, idx: number) => (
                 <div key={idx} style={{ backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #E5E1D8' }}>
                   <div onClick={() => setOpenIndex(openIndex === idx ? null : idx)} style={{ padding: '20px', display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
                     <span style={{ fontSize: '24px' }}>{item.icon}</span>
                     <span style={{ fontWeight: '800', fontSize: '17px', flex: 1 }}>{item.title}</span>
-                    <span>{openIndex === idx ? '▲' : '▼'}</span>
+                    <span style={{ color:'#ccc' }}>{openIndex === idx ? '▲' : '▼'}</span>
                   </div>
                   {openIndex === idx && (
                     <div style={{ padding: '0 24px 28px 24px', fontSize: '15px', lineHeight: '2.0', color: '#5C5647', whiteSpace: 'pre-wrap', borderTop: '1px solid #F9F7F2', paddingTop: '15px' }}>
@@ -122,10 +275,65 @@ export default function Home() {
               ))}
             </div>
 
-            <button onClick={() => setResult(null)} style={{ width: '100%', marginTop: '40px', padding: '20px', background: 'none', border: '2px solid #E5E1D8', borderRadius: '20px', color: '#8A8271', fontWeight: '700' }}>다시 분석하기</button>
+            <button onClick={() => { setResult(null); setCurrentView('form'); }} style={{ width: '100%', marginTop: '40px', padding: '20px', background: 'none', border: '2px solid #E5E1D8', borderRadius: '20px', color: '#8A8271', fontWeight: '700', cursor: 'pointer' }}>
+              다른 사주 보러가기
+            </button>
           </>
         )}
+
+        {/* 히스토리 리스트 */}
+        {currentView === 'history' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h3 style={{ margin: '0 0 10px 10px', fontSize: '18px' }}>📜 저장된 기록</h3>
+            {historyList.length === 0 ? (
+               <div style={{ textAlign: 'center', color: '#999', padding: '60px 20px', backgroundColor:'#fff', borderRadius:'24px', border:'1px solid #E5E1D8' }}>
+                 아직 저장된 사주 기록이 없습니다.<br/>첫 번째 분석을 받아보세요!
+               </div>
+            ) : (
+              historyList.map((item: any) => (
+                <div key={item.id} onClick={() => handleHistoryClick(item)} style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '20px', border: '1px solid #E5E1D8', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow:'0 2px 5px rgba(0,0,0,0.02)' }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '5px' }}>
+                      {item.birth_info.year}년 {item.birth_info.month}월 {item.birth_info.day}일생
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#888' }}>
+                      분석일: {new Date(item.created_at).toLocaleDateString()} {new Date(item.created_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '14px', color: '#3E3A31', fontWeight:'bold' }}>결과보기 👉</span>
+                </div>
+              ))
+            )}
+            <button onClick={() => setCurrentView('form')} style={{ width: '100%', marginTop: '20px', padding: '15px', background: '#3E3A31', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: 'bold', cursor: 'pointer' }}>새 분석 하러가기</button>
+          </div>
+        )}
       </div>
+
+      <div 
+        onClick={handleKakaoShare}
+        style={{
+          position: 'fixed',
+          bottom: '30px',
+          right: '25px',
+          width: '60px',
+          height: '60px',
+          backgroundColor: '#FEE500', 
+          borderRadius: '50%',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+          cursor: 'pointer',
+          zIndex: 9999,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          fontSize: '24px',
+          transition: 'transform 0.2s'
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1.0)'}
+      >
+        💬
+      </div>
+
     </div>
   )
 }
