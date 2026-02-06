@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>진단 모드</title>
+</head>
+<body>
+    <h1>Kakao SDK 진단</h1>
+    <h2 id="status">상태: 대기중...</h2>
+    <div id="log" style="background: #eee; padding: 10px; border: 1px solid #999;"></div>
+
+    <script 
+        src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" 
+        integrity="sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2txfDWp1GuHCx4GK5Ektcf" 
+        crossorigin="anonymous"
+        onload="logSuccess()"
+        onerror="logFail()"
+    ></script>
+
+    <script>
+        function log(msg) {
+            document.getElementById('log').innerHTML += msg + "<br/>";
+            console.log(msg);
+        }
+
+        function logSuccess() {
+            document.getElementById('status').innerText = "상태: ✅ 로드 성공!";
+            document.getElementById('status').style.color = "green";
+            log("스크립트 파일 다운로드 완료.");
+            
+            if (window.Kakao) {
+                log("Kakao 객체 존재함. 초기화 시도...");
+                try {
+                    Kakao.init('35ce6b06959807394a004fd6fc0922b2'); // 본인 키
+                    log("초기화 결과: " + Kakao.isInitialized());
+                } catch(e) {
+                    log("초기화 에러: " + e);
+                }
+            } else {
+                log("⚠️ 로드는 됐는데 Kakao 객체가 없음. (이상한 상황)");
+            }
+        }
+
+        function logFail() {
+            document.getElementById('status').innerText = "상태: ❌ 로드 실패 (차단됨)";
+            document.getElementById('status').style.color = "red";
+            log("브라우저가 카카오 서버 접속을 차단했습니다.");
+            log("원인: AdBlock, 네트워크 방화벽, 또는 주소 오류");
+        }
+    </script>
+</body>
+</html>

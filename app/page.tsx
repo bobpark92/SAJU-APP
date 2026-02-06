@@ -1,7 +1,9 @@
 "use client";
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
+import Script from 'next/script' // ✅ Next.js Script 사용
 
+// Supabase 클라이언트
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -14,17 +16,22 @@ declare global {
 }
 
 export default function Home() {
+  // --- 상태 관리 ---
   const [user, setUser] = useState<any>(null);
   const [formData, setFormData] = useState({ year: '', month: '', day: '', time: '', gender: 'male', calendarType: 'solar' });
   const [loading, setLoading] = useState(false);
+  
+  // 화면 전환: 'form'(입력), 'result'(결과), 'history'(기록)
   const [currentView, setCurrentView] = useState<'form' | 'result' | 'history'>('form');
   const [result, setResult] = useState<any>(null);
   const [historyList, setHistoryList] = useState<any[]>([]); 
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
-  // --- 1. 초기화 및 스크립트 로드 ---
+  // 카카오 SDK 로드 상태
+  const [isKakaoReady, setIsKakaoReady] = useState(false);
+
+  // --- 초기화 (로그인 세션 체크) ---
   useEffect(() => {
-    // 유저 세션 체크
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
@@ -35,49 +42,40 @@ export default function Home() {
       setUser(session?.user || null);
     });
 
-    // ⭐ 카카오 스크립트 로드 (중복 방지)
-    const scriptId = 'kakao-sdk-script';
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement("script");
-      script.id = scriptId;
-      script.src = "https://t.kakao.com/sdk/js/kakao.min.js";
-      script.async = true;
-      script.onload = () => {
-        if (window.Kakao && !window.Kakao.isInitialized()) {
-          window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
-          console.log("Kakao SDK Loaded via useEffect");
-        }
-      };
-      document.head.appendChild(script);
-    }
-
     return () => {
       authListener.subscription.unsubscribe();
     };
   }, []);
 
   // --- 기능 함수들 ---
+
+  // 1. 카카오 로그인
   const handleKakaoLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
-      options: { redirectTo: window.location.origin },
+      options: {
+        redirectTo: window.location.origin, 
+      },
     });
     if (error) alert(error.message);
   };
 
+  // 2. 로그아웃
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setCurrentView('form');
+    setCurrentView('form'); // 로그아웃 시 입력폼으로 이동
     setResult(null);
   };
 
+  // 3. 사주 분석 요청 및 DB 저장 (원래 로직 복구)
   const handleAnalyze = async () => {
     if (!formData.year || !formData.month || !formData.day) return alert('생년월일을 입력해주세요!');
     setLoading(true);
     setResult(null);
 
     try {
+      // 실제 API 호출
       const response = await fetch('/api/fortune', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -87,10 +85,12 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error);
 
       setResult(data);
-      setCurrentView('result');
+      setCurrentView('result'); // 결과 화면으로 전환
 
+      // 로그인한 유저라면 DB에 저장
       if (user) {
         const kakaoId = user.user_metadata?.sub || user.identities?.find((id: any) => id.provider === 'kakao')?.id;
+        
         await supabase.from('fortune_logs').insert({
           user_id: user.id,
           user_email: user.email,
@@ -100,6 +100,7 @@ export default function Home() {
           result_data: data
         });
       }
+
     } catch (err: any) {
       alert(`에러 발생: ${err.message}`);
     } finally {
@@ -107,63 +108,62 @@ export default function Home() {
     }
   }
 
+  // 4. 히스토리(나의 기록) 불러오기
   const fetchHistory = async () => {
     if (!user) return alert("로그인이 필요합니다.");
     setLoading(true);
+    
     const { data, error } = await supabase
       .from('fortune_logs')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (error) alert("기록 조회 실패");
-    else {
+    if (error) {
+      alert("기록을 불러오는데 실패했습니다.");
+    } else {
       setHistoryList(data || []);
-      setCurrentView('history');
+      setCurrentView('history'); // 기록 화면으로 전환
     }
     setLoading(false);
   };
 
+  // 5. 기록 리스트 클릭 시 결과 복원
   const handleHistoryClick = (item: any) => {
-    setFormData(item.birth_info); 
-    setResult(item.result_data);  
+    setFormData(item.birth_info); // 당시 입력했던 정보 복원
+    setResult(item.result_data);  // 당시 결과 복원
     setCurrentView('result');
   };
 
-  // ⭐ 카카오 공유하기 (비상 대책 포함)
+  // 6. ⭐ 카카오톡 공유하기 (성공한 로직 적용)
   const handleKakaoShare = () => {
-    // 1. 만약 window.Kakao가 없다면? (애드블록이나 로딩 실패 시)
-    if (!window.Kakao) {
-       // 스크립트를 강제로 다시 만듭니다.
-       const script = document.createElement("script");
-       script.src = "https://t.kakao.com/sdk/js/kakao.min.js";
-       script.async = true;
-       script.onload = () => {
-         // 로드 다 되면 바로 실행
-         if (window.Kakao && !window.Kakao.isInitialized()) {
-            window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
-            // 재귀 호출: 다시 공유하기 함수 실행
-            handleKakaoShare();
-         }
-       };
-       document.head.appendChild(script);
-       return; // 이번 클릭은 스크립트 로딩만 하고 종료
+    // 로컬 파일 방식이라 로딩 실패 확률이 거의 없지만 안전장치 추가
+    if (!isKakaoReady && (!window.Kakao || !window.Kakao.isInitialized())) {
+      // 혹시 모르니 강제 초기화 시도
+       if (window.Kakao) {
+         window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
+       } else {
+         return alert("카카오 기능 로딩 중입니다. 잠시 후 다시 눌러주세요.");
+       }
     }
 
-    // 2. 초기화 안 되어 있으면 초기화
-    if (!window.Kakao.isInitialized()) {
-      window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
+    try {
+        window.Kakao.Share.sendDefault({
+            objectType: 'text',
+            text: `[당분간무료사주] ${formData.year}년생의 운세 분석 결과가 도착했습니다!\n\n"${result?.commentary ? result.commentary.substring(0, 50) : '소름돋는 분석 결과'}..."`,
+            link: {
+                mobileWebUrl: window.location.href,
+                webUrl: window.location.href,
+            },
+            buttonTitle: '나도 결과 보기',
+        });
+    } catch (e) {
+        console.error(e);
+        alert("공유하기 실행 오류: " + e);
     }
-
-    // 3. 공유 실행
-    window.Kakao.Share.sendDefault({
-      objectType: 'text',
-      text: `[당분간무료사주] ${formData.year}년생의 운세 분석 결과가 도착했습니다!\n\n"${result?.commentary ? result.commentary.substring(0, 50) : '결과 확인하기'}..."`,
-      link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
-      buttonTitle: '바로 확인하기',
-    });
   };
 
+  // 오행 색상 결정 함수 (디자인 복구)
   const getElementColor = (char: string) => {
     if ("甲乙寅卯".includes(char)) return { color: "#2d6a4f", bg: "#e8f5e9" };
     if ("丙丁巳午".includes(char)) return { color: "#ae2012", bg: "#fff0f0" };
@@ -173,14 +173,30 @@ export default function Home() {
     return { color: "#3E3A31", bg: "#F1F5F9" };
   }
 
+  // --- 화면 렌더링 ---
   return (
     <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '80px', color: '#3E3A31', fontFamily: 'sans-serif', position: 'relative' }}>
       
-      {/* 헤더 */}
+      {/* ⭐⭐⭐ 핵심: 성공한 로컬 파일 방식 적용 ⭐⭐⭐ */}
+      {/* public 폴더에 kakao.js 파일이 반드시 있어야 합니다! */}
+      <Script
+        src="/kakao.js" 
+        strategy="afterInteractive"
+        onLoad={() => {
+          console.log("✅ Kakao SDK Loaded (Local)");
+          if (window.Kakao && !window.Kakao.isInitialized()) {
+            window.Kakao.init('35ce6b06959807394a004fd6fc0922b2');
+          }
+          setIsKakaoReady(true);
+        }}
+      />
+
+      {/* 1. 헤더 및 네비게이션 영역 */}
       <div style={{ padding: '60px 20px 20px', textAlign: 'center', backgroundColor: '#F2EFE9', borderBottom: '1px solid #E5E1D8' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '900', margin: 0, cursor:'pointer' }} onClick={() => setCurrentView('form')}>당분간무료사주</h1>
         <p style={{ color: '#8A8271', marginTop: '10px' }}>당분간 무료임. 근데 막쓰진 마셈</p>
         
+        {/* 로그인 상태바 */}
         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {!user ? (
              <button onClick={handleKakaoLogin} style={{ padding: '10px 20px', backgroundColor: '#FEE500', border: 'none', borderRadius: '12px', color: '#000', fontWeight: 'bold', cursor: 'pointer', fontSize:'14px' }}>
@@ -194,6 +210,7 @@ export default function Home() {
           )}
         </div>
         
+        {/* 탭 메뉴 (로그인 시에만 보임) */}
         {user && (
           <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '30px', fontSize: '16px', fontWeight: '700' }}>
             <span onClick={() => setCurrentView('form')} style={{ cursor: 'pointer', color: currentView === 'form' ? '#3E3A31' : '#999', borderBottom: currentView === 'form' ? '2px solid #3E3A31' : 'none', paddingBottom:'4px' }}>사주보기</span>
@@ -205,7 +222,7 @@ export default function Home() {
 
       <div style={{ maxWidth: '500px', margin: '30px auto 0', padding: '0 16px' }}>
         
-        {/* 입력 폼 */}
+        {/* VIEW 1: 정보 입력 폼 */}
         {currentView === 'form' && (
           <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', border: '1px solid #E5E1D8' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -230,9 +247,10 @@ export default function Home() {
           </div>
         )}
 
-        {/* 결과 화면 */}
+        {/* VIEW 2: 분석 결과 화면 (원래대로 복구) */}
         {currentView === 'result' && result && (
           <>
+            {/* 만세력 테이블 */}
             <div style={{ backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden', marginBottom: '24px', border: '1px solid #E5E1D8' }}>
               <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>팔자명식</div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -253,11 +271,15 @@ export default function Home() {
               </table>
             </div>
 
+            {/* 대가의 평론 */}
             <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '28px', marginBottom: '24px', border: '1px solid #E5E1D8', lineHeight: '1.8' }}>
               <h3 style={{ marginTop: 0, color: '#3E3A31', fontSize: '19px' }}>📜 대가의 총평</h3>
-              <div style={{ color: '#5C5647', fontSize: '15px', whiteSpace: 'pre-wrap' }}>{result.commentary}</div>
+              <div style={{ color: '#5C5647', fontSize: '15px', whiteSpace: 'pre-wrap' }}>
+                {result.commentary}
+              </div>
             </div>
 
+            {/* 심화 테마 (아코디언) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {result.themes.map((item: any, idx: number) => (
                 <div key={idx} style={{ backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #E5E1D8' }}>
@@ -281,7 +303,7 @@ export default function Home() {
           </>
         )}
 
-        {/* 히스토리 리스트 */}
+        {/* VIEW 3: 나의 기록 리스트 (원래대로 복구) */}
         {currentView === 'history' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ margin: '0 0 10px 10px', fontSize: '18px' }}>📜 저장된 기록</h3>
@@ -309,6 +331,7 @@ export default function Home() {
         )}
       </div>
 
+      {/* ⭐ 플로팅 공유 버튼 (모든 화면에서 우측 하단 고정) ⭐ */}
       <div 
         onClick={handleKakaoShare}
         style={{
@@ -317,17 +340,18 @@ export default function Home() {
           right: '25px',
           width: '60px',
           height: '60px',
-          backgroundColor: '#FEE500', 
+          backgroundColor: '#FEE500', // 카카오 노란색
           borderRadius: '50%',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.15)', // 그림자 효과
           cursor: 'pointer',
-          zIndex: 9999,
+          zIndex: 9999, // 제일 위에 뜨도록
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           fontSize: '24px',
-          transition: 'transform 0.2s'
+          transition: 'transform 0.2s' // 누를 때 살짝 움직이는 효과
         }}
+        // 마우스 올렸을 때 살짝 커지는 효과
         onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
         onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1.0)'}
       >
