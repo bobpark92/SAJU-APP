@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@supabase/supabase-js": "^2.93.3",
     "lunar-javascript": "^1.7.7",
     "next": "16.1.6",
