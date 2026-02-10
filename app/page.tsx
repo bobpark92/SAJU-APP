@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import Script from 'next/script' 
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -23,8 +24,6 @@ export default function Home() {
   const [historyList, setHistoryList] = useState<any[]>([]); 
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const [isKakaoReady, setIsKakaoReady] = useState(false);
-
-  // provider를 'claude'로 고정
   const [provider] = useState<'openai' | 'claude'>('claude');
 
   useEffect(() => {
@@ -134,14 +133,22 @@ export default function Home() {
     }
   };
 
-  const getElementColor = (char: string) => {
-    if ("甲乙寅卯".includes(char)) return { color: "#2d6a4f", bg: "#e8f5e9" };
-    if ("丙丁巳午".includes(char)) return { color: "#ae2012", bg: "#fff0f0" };
-    if ("戊己辰戌丑未".includes(char)) return { color: "#9c6644", bg: "#fdf5e6" };
-    if ("庚辛申酉".includes(char)) return { color: "#495057", bg: "#f8f9fa" };
-    if ("壬癸亥子".includes(char)) return { color: "#003049", bg: "#e0f2fe" };
-    return { color: "#3E3A31", bg: "#F1F5F9" };
-  }
+  // 차트 라벨 커스텀 렌더링
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, icon }: any) => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  
+    // 값이 0이 아닐 때만 차트 위에 아이콘 표시
+    if (percent === 0) return null;
+
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" style={{ fontSize: '24px', fontWeight:'bold', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }}>
+        {icon}
+      </text>
+    );
+  };
 
   return (
     <div style={{ backgroundColor: '#F9F7F2', minHeight: '100vh', paddingBottom: '80px', color: '#3E3A31', fontFamily: 'sans-serif', position: 'relative' }}>
@@ -219,34 +226,49 @@ export default function Home() {
         {currentView === 'result' && result && (
           <>
             <div style={{ textAlign:'center', marginBottom:'15px' }}>
-               <span style={{ 
-                 backgroundColor: '#fff5f0', 
-                 color: '#da7756',
-                 padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: `1px solid #da7756`
-               }}>
+               <span style={{ backgroundColor: '#fff5f0', color: '#da7756', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: `1px solid #da7756` }}>
                  🧠 Analysis by Claude 3.5 Sonnet
                </span>
             </div>
 
-            <div style={{ backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden', marginBottom: '24px', border: '1px solid #E5E1D8' }}>
-              <div style={{ backgroundColor: '#3E3A31', color: '#F2EFE9', padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>팔자명식</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr>
-                    {[result.manse.time_top, result.manse.day_top, result.manse.month_top, result.manse.year_top].map((char: string, i: number) => {
-                      const s = getElementColor(char);
-                      return <td key={i} style={{ padding: '20px 0', textAlign: 'center', fontSize: '24px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char}</td>
-                    })}
-                  </tr>
-                  <tr>
-                    {[result.manse.time_bottom, result.manse.day_bottom, result.manse.month_bottom, result.manse.year_bottom].map((char: string, i: number) => {
-                      const s = getElementColor(char);
-                      return <td key={i} style={{ padding: '20px 0', textAlign: 'center', fontSize: '24px', fontWeight: '900', color: s.color, backgroundColor: s.bg, border: '1px solid #E5E1D8' }}>{char}</td>
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            {/* ⭐ [수정됨] 만세력 테이블은 삭제하고, 원형 그래프만 표시 */}
+            {result.ohaeng && result.ohaeng.length > 0 && (
+              <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '20px', marginBottom: '24px', border: '1px solid #E5E1D8', display:'flex', flexDirection:'column', alignItems:'center' }}>
+                <h3 style={{ margin: '0 0 10px', fontSize: '16px', color: '#3E3A31' }}>🌟 나의 타고난 기운 (오행)</h3>
+                <div style={{ width: '100%', height: '250px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={result.ohaeng}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={renderCustomizedLabel} 
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        isAnimationActive={true}
+                      >
+                        {result.ohaeng.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                {/* ⭐ [핵심] 범례 리스트
+                   백엔드에서 0개인 항목도 보내주므로, 여기서 0%인 것도 리스트에는 뜹니다.
+                */}
+                <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', justifyContent:'center', marginTop:'-20px' }}>
+                   {result.ohaeng.map((item:any, idx:number) => (
+                     <div key={idx} style={{ fontSize:'12px', display:'flex', alignItems:'center', gap:'4px', opacity: item.value === 0 ? 0.5 : 1 }}>
+                       <span style={{ width:'10px', height:'10px', borderRadius:'50%', backgroundColor: item.color }}></span>
+                       {item.name} {Math.round((item.value / 8) * 100)}%
+                     </div>
+                   ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '28px', marginBottom: '24px', border: '1px solid #E5E1D8', lineHeight: '1.8' }}>
               <h3 style={{ marginTop: 0, color: '#3E3A31', fontSize: '19px' }}>📜 대가의 총평</h3>
@@ -305,7 +327,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* ⭐ 플로팅 공유 버튼: 결과 화면일 때만 보이도록 수정됨 */}
       {currentView === 'result' && result && (
         <div 
           onClick={handleKakaoShare}
