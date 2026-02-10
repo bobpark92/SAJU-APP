@@ -22,7 +22,7 @@ function cleanAndParseJSON(text: string) {
   }
 }
 
-// ⭐ [수정됨] 0개인 오행도 그대로 반환하도록 필터 제거
+// 오행 계산 (기존 유지)
 function calculateOhaeng(manseData: any) {
   const chars = [
     manseData.year_top, manseData.year_bottom,
@@ -30,9 +30,7 @@ function calculateOhaeng(manseData: any) {
     manseData.day_top, manseData.day_bottom,
     manseData.time_top, manseData.time_bottom
   ];
-
   const counts = { wood: 0, fire: 0, earth: 0, metal: 0, water: 0 };
-  
   const mapping: { [key: string]: string } = {
     '甲': 'wood', '乙': 'wood', '寅': 'wood', '卯': 'wood',
     '丙': 'fire', '丁': 'fire', '巳': 'fire', '午': 'fire',
@@ -40,16 +38,11 @@ function calculateOhaeng(manseData: any) {
     '庚': 'metal', '辛': 'metal', '申': 'metal', '酉': 'metal',
     '壬': 'water', '癸': 'water', '亥': 'water', '子': 'water'
   };
-
   chars.forEach(char => {
     const element = mapping[char];
-    if (element) {
-      // @ts-ignore
-      counts[element]++;
-    }
+    // @ts-ignore
+    if (element) counts[element]++;
   });
-
-  // .filter(item => item.value > 0) 부분을 삭제하여 0개인 것도 보냅니다.
   return [
     { name: '나무', id: 'wood', value: counts.wood, color: '#2d6a4f', icon: '🌳' },
     { name: '불', id: 'fire', value: counts.fire, color: '#e63946', icon: '🔥' },
@@ -59,25 +52,11 @@ function calculateOhaeng(manseData: any) {
   ];
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { year, month, day, time, gender, calendarType, provider = 'openai' } = body;
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    const currentDay = now.getDate();
-    
-    const koreanAge = currentYear - Number(year) + 1;
-    let internationalAge = currentYear - Number(year);
-    if (currentMonth < Number(month) || (currentMonth === Number(month) && currentDay < Number(day))) {
-      internationalAge--;
-    }
-
+// 만세력 계산 헬퍼 함수
+function getManse(data: any) {
+    const { year, month, day, time, calendarType } = data;
     const hours = time ? Number(time.split(':')[0]) : 12;
     const minutes = time ? Number(time.split(':')[1]) : 0;
-
     let lunar;
     if (calendarType === 'lunar') {
       lunar = Lunar.fromYmdHms(Number(year), Number(month), Number(day), hours, minutes, 0);
@@ -85,23 +64,45 @@ export async function POST(request: Request) {
       const solar = Solar.fromYmdHms(Number(year), Number(month), Number(day), hours, minutes, 0);
       lunar = solar.getLunar();
     }
-
     const eightChars = lunar.getEightChar();
-    
-    const manseData = {
-      year_top: eightChars.getYearGan(), 
-      year_bottom: eightChars.getYearZhi(),
-      month_top: eightChars.getMonthGan(), 
-      month_bottom: eightChars.getMonthZhi(),
-      day_top: eightChars.getDayGan(), 
-      day_bottom: eightChars.getDayZhi(),
-      time_top: eightChars.getTimeGan(), 
-      time_bottom: eightChars.getTimeZhi()
+    return {
+      year_top: eightChars.getYearGan(), year_bottom: eightChars.getYearZhi(),
+      month_top: eightChars.getMonthGan(), month_bottom: eightChars.getMonthZhi(),
+      day_top: eightChars.getDayGan(), day_bottom: eightChars.getDayZhi(),
+      time_top: eightChars.getTimeGan(), time_bottom: eightChars.getTimeZhi()
     };
+}
 
-    const ohaengData = calculateOhaeng(manseData);
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    // type: 'saju' | 'gunghap' | 'face' | 'hand'
+    const { type, myData, partnerData, image } = body;
+    
+    // =================================================================================
+    // CASE 1: 사주 (기존 로직 100% 유지)
+    // =================================================================================
+    if (!type || type === 'saju') {
+        // 기존 변수명 매핑 (frontend에서 myData로 보내도 여기서 year, month 등으로 풀어서 씀)
+        const { year, month, day, time, gender, calendarType } = myData || body; // 호환성 유지
 
-    const sajuInfo = `
+        // --- 기존 로직 시작 ---
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const currentDay = now.getDate();
+        
+        const koreanAge = currentYear - Number(year) + 1;
+        let internationalAge = currentYear - Number(year);
+        if (currentMonth < Number(month) || (currentMonth === Number(month) && currentDay < Number(day))) {
+          internationalAge--;
+        }
+
+        const manseData = getManse({ year, month, day, time, calendarType });
+        const ohaengData = calculateOhaeng(manseData);
+
+        // ⚠️ 사용자 요청: sajuInfo 절대 수정 금지
+        const sajuInfo = `
     [기준 정보]
     - 기준 연도: ${currentYear}년 ${currentMonth}월 ${currentDay}일
     - 태어난 해: ${year}년
@@ -126,107 +127,167 @@ export async function POST(request: Request) {
     8. ** // 등의 특수문자 쓰지말것. 
     `;
 
-    const systemPrompt1 = "당신은 만세력 분석 전문가입니다. JSON 형식으로만 응답하세요.";
-    const userPrompt1 = `${sajuInfo} 이 명식의 오행 구성과 강약을 분석해 JSON으로 줘. { "analysis": "내용" }`;
+        const systemPrompt1 = "당신은 만세력 분석 전문가입니다. JSON 형식으로만 응답하세요.";
+        const userPrompt1 = `${sajuInfo} 이 명식의 오행 구성과 강약을 분석해 JSON으로 줘. { "analysis": "내용" }`;
 
-    const systemPrompt2 = "당신은 재치있고 입담좋은 명리학 대가입니다";
-    const userPrompt2 = `${sajuInfo}      이미 만세력 계산은 끝났으니, 사주를 면밀히 분석하는데, 
-                     딱히 1)2)식으로 문단 나누지말고, 1000자 분량정도로 써줘.아래가 적어야 하는 내용들이야. 맨 첫 마디는 너무 오버하거나 어색하지않고, 자연스러운 요즘애들 느낌으로 .
-                    =================== 
-                    0. 사주나 명리학에 대해 이야기할 때 인목, 정인, 상관, 신금 같은 전문 한자어는 쓰지 말아줘. 대신 '큰 나무의 기운', '불의 기운', '말재주 기운', '보석의 기운'처럼 누구나 이해하기 쉬운 우리말과 자연의 기운으로 풀어서 설명해줘.
-                    1. 전반적인 사주팔자 구성 설명
-                    2. 사주팔자로 보는 운명
-                    3. 음양오향 기반의 성격과 기질, 그리고 숨겨진 성격
-                    4. 인생의 고점,저점 분석
-                    5. 부와 성공이 예약된 황금기
-                    6. 조심해야 할 인생의 암흑기
-                     `;
+        const systemPrompt2 = "당신은 재치있고 입담좋은 명리학 대가입니다";
+        const userPrompt2 = `${sajuInfo}      이미 만세력 계산은 끝났으니, 사주를 면밀히 분석하는데, 
+                              딱히 1)2)식으로 문단 나누지말고, 1000자 분량정도로 써줘.아래가 적어야 하는 내용들이야. 맨 첫 마디는 너무 오버하거나 어색하지않고, 자연스러운 요즘애들 느낌으로 .
+                            =================== 
+                            0. 사주나 명리학에 대해 이야기할 때 인목, 정인, 상관, 신금 같은 전문 한자어는 쓰지 말아줘. 대신 '큰 나무의 기운', '불의 기운', '말재주 기운', '보석의 기운'처럼 누구나 이해하기 쉬운 우리말과 자연의 기운으로 풀어서 설명해줘.
+                            1. 전반적인 사주팔자 구성 설명
+                            2. 사주팔자로 보는 운명
+                            3. 음양오향 기반의 성격과 기질, 그리고 숨겨진 성격
+                            4. 인생의 고점,저점 분석
+                            5. 부와 성공이 예약된 황금기
+                            6. 조심해야 할 인생의 암흑기
+                              `;
 
-    const systemPrompt3 = "당신은 친절하고 상세한 사주 상담가입니다. 자극적이고 사용자들이 궁금해할만한 테마로 엮어서 정리해줘야합니다. 결과는 반드시 JSON 형식이어야 합니다.";
-    const userPrompt3 = `${sajuInfo} 사주를 면밀히 분석하는데, 
-                      아래는 7가지 테마에 대한 구체적인 요청이야.  700자 이상의 아주 상세한 내용을 담아 JSON으로 줘. 
-                      * 반환형식은 { "themes": [{ "icon": "이모지", "title": "센스있는 요즘 20대 유행어등을 섞어쓴 제목", "content": "700자 이상의 내용" }] }
-                      ============================================
-                      1. 연애운과 배우자운 (연애유형과 성향, 사주가 알려주는 운명의상대, 천생연분을 만나는 최적의 시기)
-                      2. 재물운 ( 사주 속에 숨겨진 재물운 , 돈이 불어날 때와 조심해야 할 때, 재물복을 놏이는 방법과 제테크 전략)
-                      3. 직업과 성공의 운명(적합한 직업과 직종 제안, 내운명은 사업가일까 직장인일까)
-                      4. 건강,체질,거주환경 (타고난 건강 체질과 관리법 , 건강에 유의해야 할 시기와 대처법, 추천하는 거주지역 특성과 구체적인 도시예시 )
-                      5. 운명의 귀인 ( 나를 돕는 귀인의 특징, 운명의 귀인을 만나는 시기 )
-                      6. 운명을 바꾸는 법 ( 사주가 가리키는 운명의 개선점, 운의 물길을 바꾸는 인생전략)
-                      7. 미래예측 ( 올해의 월별 운명 분석, 향후 10년 운명 분석)`;
+        const systemPrompt3 = "당신은 친절하고 상세한 사주 상담가입니다. 자극적이고 사용자들이 궁금해할만한 테마로 엮어서 정리해줘야합니다. 결과는 반드시 JSON 형식이어야 합니다.";
+        const userPrompt3 = `${sajuInfo} 사주를 면밀히 분석하는데, 
+                              아래는 7가지 테마에 대한 구체적인 요청이야.  700자 이상의 아주 상세한 내용을 담아 JSON으로 줘. 
+                              * 반환형식은 { "themes": [{ "icon": "이모지", "title": "센스있는 요즘 20대 유행어등을 섞어쓴 제목", "content": "700자 이상의 내용" }] }
+                              ============================================
+                              1. 연애운과 배우자운 (연애유형과 성향, 사주가 알려주는 운명의상대, 천생연분을 만나는 최적의 시기)
+                              2. 재물운 ( 사주 속에 숨겨진 재물운 , 돈이 불어날 때와 조심해야 할 때, 재물복을 놏이는 방법과 제테크 전략)
+                              3. 직업과 성공의 운명(적합한 직업과 직종 제안, 내운명은 사업가일까 직장인일까)
+                              4. 건강,체질,거주환경 (타고난 건강 체질과 관리법 , 건강에 유의해야 할 시기와 대처법, 추천하는 거주지역 특성과 구체적인 도시예시 )
+                              5. 운명의 귀인 ( 나를 돕는 귀인의 특징, 운명의 귀인을 만나는 시기 )
+                              6. 운명을 바꾸는 법 ( 사주가 가리키는 운명의 개선점, 운의 물길을 바꾸는 인생전략)
+                              7. 미래예측 ( 올해의 월별 운명 분석, 향후 10년 운명 분석)`;
 
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
+        // ✅ 사주 = Claude
+        const modelName = "claude-sonnet-4-5"; 
 
-    let resultCommentary = "";
-    let resultThemes = [];
+        const [res1, res2, res3] = await Promise.all([
+            anthropic.messages.create({ model: modelName, max_tokens: 2048, system: systemPrompt1, messages: [{ role: "user", content: userPrompt1 }] }),
+            anthropic.messages.create({ model: modelName, max_tokens: 4096, system: systemPrompt2, messages: [{ role: "user", content: userPrompt2 }] }),
+            anthropic.messages.create({ model: modelName, max_tokens: 8192, system: systemPrompt3, messages: [{ role: "user", content: userPrompt3 + "\n\nJSON output only." }] })
+        ]);
 
-    if (provider === 'claude') {
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
-      // ✅ [약속] 모델명 고정
-      const modelName = "claude-sonnet-4-5"; 
+        // @ts-ignore
+        const resultCommentary = res2.content[0].text;
+        // @ts-ignore
+        const themesObj = cleanAndParseJSON(res3.content[0].text);
+        const resultThemes = themesObj.themes || [];
 
-      const [res1, res2, res3] = await Promise.all([
-        anthropic.messages.create({
-          model: modelName,
-          max_tokens: 2048,
-          system: systemPrompt1,
-          messages: [{ role: "user", content: userPrompt1 }],
-        }),
-        anthropic.messages.create({
-          model: modelName,
-          max_tokens: 4096,
-          system: systemPrompt2,
-          messages: [{ role: "user", content: userPrompt2 }],
-        }),
-        anthropic.messages.create({
-          model: modelName,
-          max_tokens: 8192,
-          system: systemPrompt3,
-          messages: [{ role: "user", content: userPrompt3 + "\n\nJSON output only. Do not include markdown formatting like ```json" }], 
-        })
-      ]);
-
-      // @ts-ignore
-      resultCommentary = res2.content[0].text;
-      // @ts-ignore
-      const themesObj = cleanAndParseJSON(res3.content[0].text);
-      resultThemes = themesObj.themes || [];
-
-    } else {
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
-      const modelName = "gpt-5.2";
-
-      const [res1, res2, res3] = await Promise.all([
-        openai.chat.completions.create({
-          model: modelName,
-          messages: [{ role: "system", content: systemPrompt1 }, { role: "user", content: userPrompt1 }],
-          response_format: { type: "json_object" },
-          temperature: 0.5
-        }),
-        openai.chat.completions.create({
-          model: modelName,
-          messages: [{ role: "system", content: systemPrompt2 }, { role: "user", content: userPrompt2 }],
-          temperature: 0.9
-        }),
-        openai.chat.completions.create({
-          model: modelName,
-          messages: [{ role: "system", content: systemPrompt3 }, { role: "user", content: userPrompt3 }],
-          response_format: { type: "json_object" },
-          temperature: 0.85
-        })
-      ]);
-
-      resultCommentary = res2.choices[0].message.content || "";
-      const themesObj = JSON.parse(res3.choices[0].message.content || '{}');
-      resultThemes = themesObj.themes || [];
+        return NextResponse.json({ manse: manseData, ohaeng: ohaengData, commentary: resultCommentary, themes: resultThemes, provider: 'claude' });
     }
 
-    return NextResponse.json({ 
-      manse: manseData,
-      ohaeng: ohaengData, 
-      commentary: resultCommentary,
-      themes: resultThemes,
-      provider: provider
-    });
+    // =================================================================================
+    // CASE 2: 궁합 (Claude 사용)
+    // =================================================================================
+    else if (type === 'gunghap') {
+        const manseA = getManse(myData);
+        const manseB = getManse(partnerData);
+        
+        // 궁합용 프롬프트 (기존 sajuInfo 스타일을 차용하여 작성)
+        const gunghapInfo = `
+        [두 사람의 명식 정보]
+        A(나): ${myData.year}년생 ${myData.gender === 'male' ? '남성' : '여성'}, 명식: ${manseA.year_top}${manseA.year_bottom} ${manseA.month_top}${manseA.month_bottom} ${manseA.day_top}${manseA.day_bottom}
+        B(상대): ${partnerData.year}년생 ${partnerData.gender === 'male' ? '남성' : '여성'}, 명식: ${manseB.year_top}${manseB.year_bottom} ${manseB.month_top}${manseB.month_bottom} ${manseB.day_top}${manseB.day_bottom}
+
+        [지시사항]
+        이 두 사람의 궁합을 분석해주세요. 말투는 친한 친구가 말해주듯 반말(구어체)로, 한자는 쓰지 말고, 재치있고 센스있게 1000자 분량으로 작성해주세요.
+        전문 용어 대신 '서로 불이 너무 많아 싸울 수 있어' 처럼 쉽게 풀어주세요.
+        `;
+
+        const gunghapThemePrompt = `
+        위 두 사람의 궁합을 아래 5가지 테마로 상세 분석해서 JSON으로 줘.
+        * 반환형식: { "themes": [{ "icon": "이모지", "title": "제목", "content": "내용" }] }
+        1. 속궁합 및 케미 (성격차이, 스킨십 등)
+        2. 결혼 가능성 및 미래
+        3. 서로에게 득이 되는 점과 독이 되는 점
+        4. 싸움의 원인과 해결법
+        5. 총점 및 한줄 요약
+        `;
+
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' });
+        const modelName = "claude-sonnet-4-5"; // ✅ 궁합 = Claude
+
+        const [resCommentary, resThemes] = await Promise.all([
+            anthropic.messages.create({ 
+                model: modelName, max_tokens: 4096, 
+                system: "당신은 궁합 분석 전문가입니다.", 
+                messages: [{ role: "user", content: gunghapInfo }] 
+            }),
+            anthropic.messages.create({ 
+                model: modelName, max_tokens: 8192, 
+                system: "JSON 형식으로만 답해주세요.", 
+                messages: [{ role: "user", content: gunghapThemePrompt + "\n\nJSON output only." }] 
+            })
+        ]);
+
+        // @ts-ignore
+        const commentary = resCommentary.content[0].text;
+        // @ts-ignore
+        const themesObj = cleanAndParseJSON(resThemes.content[0].text);
+
+        return NextResponse.json({ 
+            manse: manseA, // A의 만세를 메인으로 표시하거나 둘 다 줄 수 있음
+            commentary: commentary, 
+            themes: themesObj.themes || [], 
+            provider: 'claude' 
+        });
+    }
+
+    // =================================================================================
+    // CASE 3: 관상 & 손금 (OpenAI Vision 사용)
+    // =================================================================================
+    else if (type === 'face' || type === 'hand') {
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
+        const modelName = "gpt-4o"; // ✅ 비전 = GPT-4o
+
+        const systemPrompt = `당신은 세계적인 ${type === 'face' ? '관상가' : '손금 전문가'}입니다. 
+        사용자가 보낸 사진을 정밀 분석하여 결과를 반환하세요.
+        말투는 친근하고 재치있는 반말(구어체)을 사용하세요.`;
+
+        const userMsg = type === 'face' 
+            ? "이 사람의 얼굴 관상을 봐줘. 이마, 눈, 코, 입, 하관을 분석해서 초년, 중년, 말년운과 성격, 재물운을 1000자 정도로 재밌게 설명해줘." 
+            : "이 사람의 손금을 봐줘. 생명선, 두뇌선, 감정선, 운명선 등을 분석해서 건강, 지능, 성격, 인생의 흐름을 1000자 정도로 재밌게 설명해줘.";
+
+        const themePrompt = type === 'face'
+            ? `위 관상 분석을 바탕으로 4가지 테마 JSON을 만들어줘. 
+               1. 내가 왕이 될 상인가? (리더십과 출세운) 2. 도화살과 인기운 3. 재물복이 들어오는 구멍 4. 조심해야 할 건강`
+            : `위 손금 분석을 바탕으로 4가지 테마 JSON을 만들어줘. 
+               1. 타고난 수명과 건강 2. 대박 터질 시기 (재물운) 3. 타고난 두뇌와 직업 적성 4. 배우자운과 결혼`;
+
+        // 1. 텍스트 평론 (Vision)
+        const responseCommentary = await openai.chat.completions.create({
+            model: modelName,
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: [
+                    { type: "text", text: userMsg },
+                    { type: "image_url", image_url: { url: image } } // Base64 이미지
+                ]}
+            ],
+            max_tokens: 1000
+        });
+
+        // 2. 테마 분석 (Vision Context를 이어서 질문하거나, 그냥 텍스트 생성으로 처리)
+        // 비용 절약을 위해 방금 나온 평론을 바탕으로 테마를 정리하게 시킵니다.
+        const commentaryText = responseCommentary.choices[0].message.content || "";
+        
+        const responseThemes = await openai.chat.completions.create({
+            model: modelName,
+            messages: [
+                { role: "user", content: `아래 분석 내용을 바탕으로 JSON 데이터를 만들어줘.\n\n분석내용: ${commentaryText}\n\n요청사항: ${themePrompt}\n\n* 반환형식: { "themes": [{ "icon": "이모지", "title": "제목", "content": "내용" }] }` }
+            ],
+            response_format: { type: "json_object" }
+        });
+
+        const themesObj = JSON.parse(responseThemes.choices[0].message.content || '{}');
+
+        return NextResponse.json({ 
+            commentary: commentaryText, 
+            themes: themesObj.themes || [], 
+            provider: 'openai' 
+        });
+    }
+
+    return NextResponse.json({ error: "Invalid type" }, { status: 400 });
 
   } catch (error: any) {
     console.error("API Error Details:", error);
